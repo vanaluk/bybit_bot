@@ -83,8 +83,8 @@ def run_algorithm(helper, coin: str, check_interval: int = 10):
 
     symbol = f"{coin}USDT"
     category = "spot"
-    buy_amount = 431  # сумма в USDT для покупки
-    price_drop_threshold = -1  # порог падения цены для покупки
+    buy_amount = 430  # сумма в USDT для покупки
+    price_drop_threshold = -0.5  # порог падения цены для покупки
     price_rise_threshold = 5  # порог роста цены для продажи
     entry_price = None  # цена входа в позицию
     trailing_price = None  # цена для трейлинг-стопа
