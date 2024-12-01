@@ -1,9 +1,9 @@
 """
-Bybit Trading Helper Functions
+Вспомогательные функции для торговли на Bybit
 
-This module contains utility functions for interacting with the Bybit API,
-including functions for retrieving account information, logging transfers,
-and monitoring API limits.
+Этот модуль содержит вспомогательные функции для взаимодействия с API Bybit,
+включая функции для получения информации об аккаунте, логирования переводов
+и мониторинга лимитов API.
 """
 
 import pandas as pd
@@ -13,29 +13,29 @@ from pybit.unified_trading import HTTP
 
 def log_limits(headers: dict):
     """
-    Log API request limits.
+    Логирование лимитов API запросов.
 
-    Args:
-        headers (dict): API response headers containing limit information
+    Аргументы:
+        headers (dict): Заголовки ответа API, содержащие информацию о лимитах
     """
     print(
-        f"Limits  {headers.get('X-Bapi-Limit-Status')} / {headers.get('X-Bapi-Limit')}"
+        f"Лимиты  {headers.get('X-Bapi-Limit-Status')} / {headers.get('X-Bapi-Limit')}"
     )
 
 
 def assets(cl: HTTP):
     """
-    Retrieve account balances for the UNIFIED trading account.
+    Получение балансов для UNIFIED торгового аккаунта.
 
-    Note: This method shows balances for the UNIFIED account and does not
-    display full wallet balances. Copy trading, funding, and inverse
-    account details are not included.
+    Примечание: Этот метод показывает балансы только для UNIFIED аккаунта и не
+    отображает полные балансы кошелька. Детали копи-трейдинга, фандинга и
+    инверсных аккаунтов не включены.
 
-    Args:
-        cl (HTTP): Bybit HTTP client with authentication credentials
+    Аргументы:
+        cl (HTTP): HTTP клиент Bybit с учетными данными для аутентификации
 
-    Returns:
-        dict: Account assets information
+    Возвращает:
+        dict: Информация об активах аккаунта
     """
     r, _, h = cl.get_wallet_balance(accountType="UNIFIED")
     r = r.get("result", {}).get("list", [])[0]
@@ -54,17 +54,17 @@ def assets(cl: HTTP):
 
 def get_transfers(cl: HTTP):
     """
-    Retrieve and log fund transfer records for the account.
+    Получение и логирование записей о переводах средств для аккаунта.
 
-    This function fetches transfer transactions without pagination.
-    It creates a DataFrame with transfer-related information and sorts
-    the transactions by timestamp in descending order.
+    Эта функция получает транзакции переводов без пагинации.
+    Создает DataFrame с информацией о переводах и сортирует
+    транзакции по временной метке в порядке убывания.
 
-    Args:
-        cl (HTTP): Bybit HTTP client with authentication credentials
+    Аргументы:
+        cl (HTTP): HTTP клиент Bybit с учетными данными для аутентификации
 
-    Returns:
-        pandas.DataFrame: A DataFrame containing transfer transaction details
+    Возвращает:
+        pandas.DataFrame: DataFrame, содержащий детали транзакций переводов
     """
     r, _, h = cl.get_transaction_log()
 

@@ -1,15 +1,15 @@
 """
-Bybit Trading Bot Utility Script
+Утилита торгового бота для Bybit
 
-This module provides utility functions for interacting
-with the Bybit cryptocurrency trading platform.
-It includes functionality for:
-- Retrieving account assets
-- Fetching and logging fund transfers
-- Handling API requests and authentication
+Этот модуль предоставляет утилиты для взаимодействия
+с торговой платформой Bybit.
+Включает функциональность для:
+- Получения информации об активах
+- Получения и логирования переводов средств
+- Обработки API запросов и аутентификации
 
-The script uses environment variables for API key and secret authentication.
-Requires pybit library and python-dotenv for API interactions and environment management.
+Скрипт использует переменные окружения для API ключа и секрета.
+Требует библиотеки pybit и python-dotenv для взаимодействия с API и управления окружением.
 """
 
 import os
@@ -31,17 +31,17 @@ SECRET_KEY = os.getenv("BB_SECRET_KEY")
 
 def main():
     """
-    Main function to execute Bybit trading bot operations.
+    Основная функция для выполнения операций торгового бота Bybit.
 
-    This function:
-    1. Initializes a Bybit HTTP client with API credentials
-    2. Retrieves account assets
-    3. Fetches and logs fund transfers
-    4. Handles potential API request errors
+    Эта функция:
+    1. Инициализирует HTTP клиент Bybit с учетными данными API
+    2. Получает информацию об активах аккаунта
+    3. Получает и логирует переводы средств
+    4. Обрабатывает возможные ошибки API запросов
 
-    Raises:
-        exceptions.InvalidRequestError: If there's an invalid API request
-        exceptions.FailedRequestError: If the API request fails
+    Исключения:
+        exceptions.InvalidRequestError: Если произошла ошибка в API запросе
+        exceptions.FailedRequestError: Если API запрос не удался
     """
     cl = HTTP(
         api_key=API_KEY,
@@ -52,33 +52,33 @@ def main():
 
     try:
         if not API_KEY or not SECRET_KEY:
-            raise ValueError("API_KEY or SECRET_KEY not found in environment variables")
+            raise ValueError("API_KEY или SECRET_KEY не найдены в переменных окружения")
 
         assets(cl)
         get_transfers(cl)
     except exceptions.InvalidRequestError as e:
-        print("ByBit Request Error", e.status_code, e.message, sep=" | ")
+        print("Ошибка запроса ByBit", e.status_code, e.message, sep=" | ")
     except exceptions.FailedRequestError as e:
-        print("ByBit Request Failed", e.status_code, e.message, sep=" | ")
+        print("Ошибка выполнения запроса ByBit", e.status_code, e.message, sep=" | ")
     except exceptions.UnauthorizedExceptionError as e:
-        print("ByBit Authorization Error", str(e), sep=" | ")
+        print("Ошибка авторизации ByBit", str(e), sep=" | ")
     except exceptions.InvalidChannelTypeError as e:
-        print("ByBit Channel Error", str(e), sep=" | ")
+        print("Ошибка канала ByBit", str(e), sep=" | ")
     except exceptions.TopicMismatchError as e:
-        print("ByBit Topic Error", str(e), sep=" | ")
+        print("Ошибка темы ByBit", str(e), sep=" | ")
     except (KeyError, ValueError, TypeError) as e:
-        print("Data Processing Error", str(e), sep=" | ")
+        print("Ошибка обработки данных", str(e), sep=" | ")
     except (ConnectionError, TimeoutError) as e:
-        print("Network Error", str(e), sep=" | ")
+        print("Ошибка сети", str(e), sep=" | ")
     except (OSError, IOError) as e:
-        print("File Operation Error", str(e), sep=" | ")
+        print("Ошибка операции с файлом", str(e), sep=" | ")
     except RuntimeError as e:
-        print("Runtime Error", str(e), sep=" | ")
+        print("Ошибка выполнения", str(e), sep=" | ")
     except AttributeError as e:
-        print("API Response Error", str(e), sep=" | ")
+        print("Ошибка ответа API", str(e), sep=" | ")
     # trunk-ignore(pylint/W0718)
     except Exception as e:
-        print("Unknown Error", str(e), sep=" | ")
+        print("Неизвестная ошибка", str(e), sep=" | ")
 
 
 if __name__ == "__main__":
