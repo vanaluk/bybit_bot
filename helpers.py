@@ -147,7 +147,8 @@ class BybitHelper:
             self.log_limits(headers)
 
             # Возвращаем баланс запрошенной монеты или 0.0, если монета не найдена
-            return balances.get(coin, 0.0)
+            # return balances.get(coin, 0.0)
+            return self.round_down(balances.get(coin, 0.0), 3)
 
         except (KeyError, IndexError) as e:
             raise RuntimeError(f"Неожиданный формат ответа API: {str(e)}")

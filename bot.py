@@ -63,12 +63,13 @@ def main():
 
         print("2. Get availible coin balance (XRP)")
         avbl = helper.get_assets("XRP")
-        print(
-            avbl,
-            round(avbl, 3),
-            helper.round_down(avbl, 3),
-            helper.float_trunc(avbl, 3),
-        )
+        #        print(
+        #            avbl,
+        #            round(avbl, 3),
+        #            helper.round_down(avbl, 3),
+        #            helper.float_trunc(avbl, 3),
+        #        )
+        print(avbl)
         print("----------------")
 
         print("3. Get price (XRPUSDT)")
