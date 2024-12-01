@@ -87,7 +87,8 @@ def run_algorithm(helper, coin: str, check_interval: int = 10):
     price_drop_threshold = -1  # порог падения цены для покупки
     price_rise_threshold = 5  # порог роста цены для продажи
     entry_price = None  # цена входа в позицию
-    hours_period = 12  # период для отслеживания изменения цены
+    trailing_price = None  # цена для трейлинг-стопа
+    hours_period = 3  # период для отслеживания изменения цены
 
     print(f"Запуск алгоритма для {symbol}")
     print(
@@ -103,13 +104,13 @@ def run_algorithm(helper, coin: str, check_interval: int = 10):
             # Форматируем время для вывода
             current_time = datetime.now().strftime("%H:%M:%S")
 
-            print(
-                f"[{current_time}] Цена {symbol}: {current_price:.4f} USDT (Изменение за {hours_period} часов: {price_change:.2f}%)",
-                end="",
-            )
-
             if entry_price is None:
                 # Если мы не в позиции, ищем возможность для входа
+                print(
+                    f"[{current_time}] Цена {symbol}: {current_price:.4f} USDT (Изменение за {hours_period} часов: {price_change:.2f}%)",
+                    end="",
+                )
+
                 if price_change <= price_drop_threshold:
                     print(
                         f"\nЦена упала на {abs(price_change):.2f}% за {hours_period} часов. Размещаем ордер на покупку."
@@ -133,19 +134,44 @@ def run_algorithm(helper, coin: str, check_interval: int = 10):
                     print(f"Ордер на покупку размещен успешно. ID: {order_id}")
 
                     entry_price = current_price
+                    trailing_price = (
+                        current_price  # Устанавливаем начальную цену для трейлинга
+                    )
                     print(f"Вошли в позицию по цене: {entry_price:.4f} USDT")
                 else:
                     print(f" (Ждем падения цены)")
             else:
-                # Если мы в позиции, проверяем условие для выхода
-                price_change_from_entry = (
+                # Если мы в позиции, проверяем условия для трейлинга или выхода
+                price_change_from_trailing = (
+                    (current_price - trailing_price) / trailing_price
+                ) * 100
+                total_change_from_entry = (
                     (current_price - entry_price) / entry_price
                 ) * 100
-                print(f" (Изменение от входа: {price_change_from_entry:.2f}%)")
 
-                if price_change_from_entry >= price_rise_threshold:
+                print(
+                    f"[{current_time}] Цена {symbol}: {current_price:.4f} USDT",
+                    f"(От точки входа: {total_change_from_entry:.2f}%,",
+                    f"От трейлинга: {price_change_from_trailing:.2f}%)",
+                    end="",
+                )
+
+                if price_change_from_trailing >= price_rise_threshold:
+                    # Если цена выросла выше порога, обновляем трейлинг
+                    old_trailing = trailing_price
+                    trailing_price = current_price
                     print(
-                        f"\nЦена выросла на {price_change_from_entry:.2f}% от точки входа. Размещаем ордер на продажу."
+                        f"\nЦена выросла на {price_change_from_trailing:.2f}% от последней точки трейлинга."
+                    )
+                    print(
+                        f"Обновляем точку трейлинга: {old_trailing:.4f} -> {trailing_price:.4f} USDT"
+                    )
+                    print(f"Общая прибыль от входа: {total_change_from_entry:.2f}%")
+
+                elif price_change_from_trailing <= price_drop_threshold:
+                    # Если цена упала ниже порога от максимума, продаем
+                    print(
+                        f"\nЦена упала на {abs(price_change_from_trailing):.2f}% от точки трейлинга. Размещаем ордер на продажу."
                     )
                     r = helper.place_order(
                         category=category,
@@ -166,8 +192,11 @@ def run_algorithm(helper, coin: str, check_interval: int = 10):
                     print(f"Ордер на продажу размещен успешно. ID: {order_id}")
 
                     print(f"Закрыли позицию по цене: {current_price:.4f} USDT")
-                    print(f"Прибыль: {price_change_from_entry:.2f}%")
+                    print(f"Итоговая прибыль: {total_change_from_entry:.2f}%")
                     entry_price = None
+                    trailing_price = None
+                else:
+                    print(f" (Следим за ценой)")
 
             time.sleep(check_interval)
 
