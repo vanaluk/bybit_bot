@@ -9,6 +9,7 @@
 import pandas as pd
 from pandas import DataFrame
 from pybit.unified_trading import HTTP
+import time
 
 
 class BybitHelper:
@@ -253,8 +254,118 @@ class BybitHelper:
         except Exception as e:
             raise RuntimeError(f"Ошибка получения информации об инструменте: {str(e)}")
 
-    @staticmethod
-    def float_trunc(f: float, prec: int) -> float:
+    def get_price(self, category: str, symbol: str) -> float:
+        """
+        Получение текущей цены инструмента
+
+        Args:
+            category (str): Категория торговли (например, "spot", "linear")
+            symbol (str): Торговая пара (например, "BTCUSDT")
+
+        Returns:
+            float: Текущая цена
+
+        Raises:
+            ValueError: Если клиент не инициализирован
+            RuntimeError: Если возникла ошибка при получении цены
+        """
+        if not self.client:
+            raise ValueError("HTTP клиент не инициализирован")
+
+        try:
+            response, _, headers = self.client.get_tickers(
+                category=category,
+                symbol=symbol
+            )
+            self.log_limits(headers)
+            
+            # Получаем цену последней сделки
+            price = float(response.get('result', {}).get('list', [])[0].get('lastPrice', '0.0'))
+            return price
+        except Exception as e:
+            raise RuntimeError(f"Ошибка получения цены: {str(e)}")
+
+    def get_price_change(self, category: str, symbol: str, hours: int = 1) -> float:
+        """
+        Получить изменение цены за указанный период в процентах
+
+        Args:
+            category: Категория торгов (например, "spot")
+            symbol: Торговая пара (например, "BTCUSDT")
+            hours: Количество часов для расчета изменения цены (по умолчанию 1)
+
+        Returns:
+            float: Процентное изменение цены
+        """
+        try:
+            # Получаем текущее время в миллисекундах
+            current_time = int(time.time() * 1000)
+            # Получаем время hours часов назад
+            past_time = current_time - (hours * 60 * 60 * 1000)
+            
+            print(f"\nЗапрос исторических данных:")
+            print(f"- Категория: {category}")
+            print(f"- Символ: {symbol}")
+            print(f"- Интервал: 60 минут")
+            print(f"- Начальное время: {past_time}")
+            print(f"- Конечное время: {current_time}")
+            print(f"- Лимит: {hours + 1}")
+
+            # Получаем исторические данные
+            kline_data, response_info, headers = self.client.get_kline(
+                category=category,
+                symbol=symbol,
+                interval="60",  # используем часовые свечи
+                start=past_time,
+                end=current_time,
+                limit=hours + 1  # получаем данные за указанное количество часов
+            )
+            
+            # Логируем лимиты
+            self.log_limits(headers)
+            
+            print("\nОтвет от API:")
+            print(f"- Данные: {kline_data}")
+            print(f"- Информация об ответе: {response_info}")
+
+            if (isinstance(kline_data, dict) and 
+                kline_data.get('retCode') == 0 and 
+                'result' in kline_data and 
+                'list' in kline_data['result']):
+                
+                candles = kline_data['result']['list']
+                if len(candles) > 0:
+                    print(f"\nПолучено свечей: {len(candles)}")
+                    print(f"Первая свеча (новая): {candles[0]}")
+                    print(f"Последняя свеча (старая): {candles[-1]}")
+                    
+                    # Структура свечи: [timestamp, open, high, low, close, volume, turnover]
+                    oldest_candle = candles[-1]
+                    past_price = float(oldest_candle[4])  # индекс 4 - цена закрытия
+                    print(f"\nЦена {hours} часов назад: {past_price}")
+                    
+                    # Получаем текущую цену
+                    current_price = self.get_price(category, symbol)
+                    print(f"Текущая цена: {current_price}")
+                    
+                    # Вычисляем процентное изменение
+                    price_change = ((current_price - past_price) / past_price) * 100
+                    print(f"Расчет изменения: ({current_price} - {past_price}) / {past_price} * 100 = {price_change}%")
+                    
+                    return price_change
+            
+            print("\nНе удалось получить данные свечей")
+            return 0.0
+
+        except Exception as e:
+            print(f"\nОшибка при получении изменения цены: {str(e)}")
+            print(f"Тип ошибки: {type(e)}")
+            import traceback
+            print("Traceback:")
+            print(traceback.format_exc())
+            return 0.0
+
+    def float_trunc(self, f: float, prec: int) -> float:
         """
         Ещё один способ отбросить от float лишнее без округлений
 
@@ -268,8 +379,7 @@ class BybitHelper:
         l, r = f"{float(f):.12f}".split(".")  # 12 дб достаточно для всех монет
         return float(f"{l}.{r[:prec]}")
 
-    @staticmethod
-    def round_down(value: float, decimals: int) -> float:
+    def round_down(self, value: float, decimals: int) -> float:
         """
         Ещё один способ отбросить от float лишнее без округлений
 

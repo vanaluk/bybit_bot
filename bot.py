@@ -19,6 +19,8 @@ from dotenv import load_dotenv
 from pybit import exceptions
 from pybit.unified_trading import HTTP
 from helpers import BybitHelper
+import time
+from datetime import datetime
 
 pd.set_option("display.max_rows", 500)
 pd.set_option("display.max_columns", 500)
@@ -69,6 +71,112 @@ def test_place_order(helper):
     print("----------------")
 
 
+def run_algorithm(helper, coin: str, check_interval: int = 10):
+    """
+    Запуск торгового алгоритма
+
+    Args:
+        helper: экземпляр BybitHelper
+        coin: название монеты (например, "XRP")
+        check_interval: интервал проверки цены в секундах
+    """
+
+    symbol = f"{coin}USDT"
+    category = "spot"
+    buy_amount = 431  # сумма в USDT для покупки
+    price_drop_threshold = -1  # порог падения цены для покупки
+    price_rise_threshold = 5  # порог роста цены для продажи
+    entry_price = None  # цена входа в позицию
+    hours_period = 12  # период для отслеживания изменения цены
+
+    print(f"Запуск алгоритма для {symbol}")
+    print(
+        f"Ожидание падения цены на {abs(price_drop_threshold)}% за {hours_period} часов"
+    )
+
+    while True:
+        try:
+            # Получаем текущую цену и изменение за указанный период
+            current_price = helper.get_price(category, symbol)
+            price_change = helper.get_price_change(category, symbol, hours=hours_period)
+
+            # Форматируем время для вывода
+            current_time = datetime.now().strftime("%H:%M:%S")
+
+            print(
+                f"[{current_time}] Цена {symbol}: {current_price:.4f} USDT (Изменение за {hours_period} часов: {price_change:.2f}%)",
+                end="",
+            )
+
+            if entry_price is None:
+                # Если мы не в позиции, ищем возможность для входа
+                if price_change <= price_drop_threshold:
+                    print(
+                        f"\nЦена упала на {abs(price_change):.2f}% за {hours_period} часов. Размещаем ордер на покупку."
+                    )
+                    r = helper.place_order(
+                        category=category,
+                        symbol=symbol,
+                        side="Buy",
+                        order_type="Market",
+                        qty=buy_amount,
+                        market_unit="quoteCoin",
+                    )
+
+                    if r.get("retCode") != 0:
+                        print(
+                            f"\nОшибка при размещении ордера на покупку: {r.get('retMsg')}"
+                        )
+                        raise Exception(f"Ошибка размещения ордера: {r.get('retMsg')}")
+
+                    order_id = r.get("result", {}).get("orderId")
+                    print(f"Ордер на покупку размещен успешно. ID: {order_id}")
+
+                    entry_price = current_price
+                    print(f"Вошли в позицию по цене: {entry_price:.4f} USDT")
+                else:
+                    print(f" (Ждем падения цены)")
+            else:
+                # Если мы в позиции, проверяем условие для выхода
+                price_change_from_entry = (
+                    (current_price - entry_price) / entry_price
+                ) * 100
+                print(f" (Изменение от входа: {price_change_from_entry:.2f}%)")
+
+                if price_change_from_entry >= price_rise_threshold:
+                    print(
+                        f"\nЦена выросла на {price_change_from_entry:.2f}% от точки входа. Размещаем ордер на продажу."
+                    )
+                    r = helper.place_order(
+                        category=category,
+                        symbol=symbol,
+                        side="Sell",
+                        order_type="Market",
+                        qty=buy_amount,
+                        market_unit="quoteCoin",
+                    )
+
+                    if r.get("retCode") != 0:
+                        print(
+                            f"\nОшибка при размещении ордера на продажу: {r.get('retMsg')}"
+                        )
+                        raise Exception(f"Ошибка размещения ордера: {r.get('retMsg')}")
+
+                    order_id = r.get("result", {}).get("orderId")
+                    print(f"Ордер на продажу размещен успешно. ID: {order_id}")
+
+                    print(f"Закрыли позицию по цене: {current_price:.4f} USDT")
+                    print(f"Прибыль: {price_change_from_entry:.2f}%")
+                    entry_price = None
+
+            time.sleep(check_interval)
+
+        except Exception as e:
+            print(f"\nКритическая ошибка: {str(e)}")
+            print("Останавливаем программу...")
+            break
+
+
 def main():
     """
     Основная функция для выполнения операций торгового бота Bybit.
@@ -99,7 +207,9 @@ def main():
         # Тестирование подключения и вывод информации
         test_connection(helper)
         # Тестирование размещения ордера
-        test_place_order(helper)
+        # test_place_order(helper)
+        # Запуск торгового алгоритма
+        run_algorithm(helper, "XRP")
 
     except exceptions.InvalidRequestError as e:
         print("Ошибка запроса ByBit", e.status_code, e.message, sep=" | ")
