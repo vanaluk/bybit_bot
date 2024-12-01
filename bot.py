@@ -77,6 +77,20 @@ def main():
         print(r)
         print("----------------")
 
+        qty = 10  # теперь это количество XRP
+        print(f"4. Place order XRP - {qty} XRP (XRPUSDT)")
+
+        r = helper.place_order(
+            category="spot",
+            symbol="XRPUSDT",
+            side="Sell",
+            order_type="Market",
+            qty=qty,
+            market_unit="baseCoin",  # используем baseCoin для указания количества в XRP
+        )
+        print(r)
+        print("----------------")
+
     except exceptions.InvalidRequestError as e:
         print("Ошибка запроса ByBit", e.status_code, e.message, sep=" | ")
     except exceptions.FailedRequestError as e:

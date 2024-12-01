@@ -147,13 +147,83 @@ class BybitHelper:
             self.log_limits(headers)
 
             # Возвращаем баланс запрошенной монеты или 0.0, если монета не найдена
-            # return balances.get(coin, 0.0)
             return self.round_down(balances.get(coin, 0.0), 3)
 
         except (KeyError, IndexError) as e:
             raise RuntimeError(f"Неожиданный формат ответа API: {str(e)}")
         except ValueError as e:
             raise RuntimeError(f"Ошибка преобразования значения: {str(e)}")
+
+    def place_order(
+        self,
+        category: str,
+        symbol: str,
+        side: str,
+        order_type: str,
+        qty: float,
+        market_unit: str = "quoteCoin",
+    ) -> dict:
+        """
+        Размещение ордера на бирже
+
+        Args:
+            category (str): Категория торговли (например, "linear", "spot")
+            symbol (str): Торговая пара (например, "BTCUSDT")
+            side (str): Сторона ордера ("Buy" или "Sell")
+            order_type (str): Тип ордера (например, "Market", "Limit")
+            qty (float): Количество для торговли
+            market_unit (str, optional): Единица измерения. По умолчанию "quoteCoin"
+
+        Returns:
+            dict: Информация о размещенном ордере
+
+        Raises:
+            ValueError: Если клиент не инициализирован или параметры некорректны
+            RuntimeError: Если возникла ошибка при размещении ордера
+        """
+        if not self.client:
+            raise ValueError("HTTP клиент не инициализирован")
+        if not all([category, symbol, side, order_type]):
+            raise ValueError("Не указаны обязательные параметры ордера")
+        if qty <= 0:
+            raise ValueError("Количество должно быть больше 0")
+        if side not in ["Buy", "Sell"]:
+            raise ValueError(
+                'Некорректная сторона ордера. Используйте "Buy" или "Sell"'
+            )
+
+        try:
+            # Получаем информацию о минимальном размере ордера
+            instrument_info, _, _ = self.client.get_instruments_info(
+                category=category, symbol=symbol
+            )
+            lot_size_filter = (
+                instrument_info.get("result", {})
+                .get("list", [])[0]
+                .get("lotSizeFilter", {})
+            )
+            min_order_qty = float(lot_size_filter.get("minOrderQty", "0.0"))
+
+            # Проверяем минимальный размер ордера
+            if qty < min_order_qty:
+                raise ValueError(
+                    f"Количество {qty} меньше минимально допустимого {min_order_qty}"
+                )
+
+            response, _, headers = self.client.place_order(
+                category=category,
+                symbol=symbol,
+                side=side,
+                orderType=order_type,
+                qty=qty,
+                marketUnit=market_unit,
+            )
+
+            self.log_limits(headers)
+            return response
+
+        except Exception as e:
+            raise RuntimeError(f"Ошибка размещения ордера: {str(e)}")
 
     @staticmethod
     def float_trunc(f: float, prec: int) -> float:
