@@ -86,6 +86,7 @@ def run_algorithm(helper, coin: str, check_interval: int = 10):
     buy_amount = 430  # сумма в USDT для покупки
     price_drop_threshold = -0.5  # порог падения цены для покупки
     price_rise_threshold = 5  # порог роста цены для продажи
+    stop_loss_threshold = -10  # стоп-лосс (процент от точки входа)
     entry_price = None  # цена входа в позицию
     trailing_price = None  # цена для трейлинг-стопа
     hours_period = 3  # период для отслеживания изменения цены
@@ -156,7 +157,35 @@ def run_algorithm(helper, coin: str, check_interval: int = 10):
                     end="",
                 )
 
-                if price_change_from_trailing >= price_rise_threshold:
+                if total_change_from_entry <= stop_loss_threshold:
+                    # Если цена упала ниже стоп-лосса, закрываем позицию
+                    print(
+                        f"\nСработал стоп-лосс! Цена упала на {abs(total_change_from_entry):.2f}% от точки входа. Размещаем ордер на продажу."
+                    )
+                    r = helper.place_order(
+                        category=category,
+                        symbol=symbol,
+                        side="Sell",
+                        order_type="Market",
+                        qty=buy_amount,
+                        market_unit="quoteCoin",
+                    )
+
+                    if r.get("retCode") != 0:
+                        print(
+                            f"\nОшибка при размещении ордера на продажу: {r.get('retMsg')}"
+                        )
+                        raise Exception(f"Ошибка размещения ордера: {r.get('retMsg')}")
+
+                    order_id = r.get("result", {}).get("orderId")
+                    print(f"Ордер на продажу размещен успешно. ID: {order_id}")
+
+                    print(f"Закрыли позицию по цене: {current_price:.4f} USDT")
+                    print(f"Убыток: {total_change_from_entry:.2f}%")
+                    entry_price = None
+                    trailing_price = None
+
+                elif price_change_from_trailing >= price_rise_threshold:
                     # Если цена выросла выше порога, обновляем трейлинг
                     old_trailing = trailing_price
                     trailing_price = current_price
