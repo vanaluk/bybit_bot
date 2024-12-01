@@ -18,7 +18,7 @@ import pandas as pd
 from dotenv import load_dotenv
 from pybit import exceptions
 from pybit.unified_trading import HTTP
-from helpers import assets, get_transfers, log_limits
+from helpers import BybitHelper
 
 pd.set_option("display.max_rows", 500)
 pd.set_option("display.max_columns", 500)
@@ -43,19 +43,39 @@ def main():
         exceptions.InvalidRequestError: Если произошла ошибка в API запросе
         exceptions.FailedRequestError: Если API запрос не удался
     """
-    cl = HTTP(
-        api_key=API_KEY,
-        api_secret=SECRET_KEY,
-        recv_window=60000,
-        return_response_headers=True,
-    )
-
     try:
         if not API_KEY or not SECRET_KEY:
             raise ValueError("API_KEY или SECRET_KEY не найдены в переменных окружения")
 
-        assets(cl)
-        get_transfers(cl)
+        client = HTTP(
+            api_key=API_KEY,
+            api_secret=SECRET_KEY,
+            recv_window=60000,
+            return_response_headers=True,
+        )
+
+        helper = BybitHelper(client)
+
+        print("1. Get all balance")
+        helper.assets()
+        print("----------------")
+        # helper.get_transfers()
+
+        print("2. Get availible coin balance (XRP)")
+        avbl = helper.get_assets("XRP")
+        print(
+            avbl,
+            round(avbl, 3),
+            helper.round_down(avbl, 3),
+            helper.float_trunc(avbl, 3),
+        )
+        print("----------------")
+
+        print("3. Get price (XRPUSDT)")
+        r = client.get_instruments_info(category="spot", symbol="XRPUSDT")
+        print(r)
+        print("----------------")
+
     except exceptions.InvalidRequestError as e:
         print("Ошибка запроса ByBit", e.status_code, e.message, sep=" | ")
     except exceptions.FailedRequestError as e:
