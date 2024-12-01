@@ -25,8 +25,48 @@ pd.set_option("display.max_columns", 500)
 pd.set_option("display.width", 1000)
 
 load_dotenv()
+
 API_KEY = os.getenv("BB_API_KEY")
 SECRET_KEY = os.getenv("BB_SECRET_KEY")
+
+
+def test_connection(helper):
+    """
+    Проверка подключения и вывод информации о балансах и ценах
+
+    Args:
+        client: HTTP клиент Bybit
+        helper: экземпляр BybitHelper
+    """
+    print("1. Get all balance")
+    helper.assets()
+    print("----------------")
+
+    print("2. Get available coin balance (XRP)")
+    avbl = helper.get_assets("XRP")
+    print(avbl)
+    print("----------------")
+
+    print("3. Get price (XRPUSDT)")
+    r = helper.get_instrument_info(category="spot", symbol="XRPUSDT")
+    print(r)
+    print("----------------")
+
+
+def test_place_order(helper):
+    # Размещение ордера
+    qty = 10  # теперь это количество XRP
+    print(f"4. Place order XRP - {qty} XRP (XRPUSDT)")
+    r = helper.place_order(
+        category="spot",
+        symbol="XRPUSDT",
+        side="Sell",
+        order_type="Market",
+        qty=qty,
+        market_unit="baseCoin",
+    )
+    print(r)
+    print("----------------")
 
 
 def main():
@@ -56,64 +96,17 @@ def main():
 
         helper = BybitHelper(client)
 
-        print("1. Get all balance")
-        helper.assets()
-        print("----------------")
-        # helper.get_transfers()
-
-        print("2. Get availible coin balance (XRP)")
-        avbl = helper.get_assets("XRP")
-        #        print(
-        #            avbl,
-        #            round(avbl, 3),
-        #            helper.round_down(avbl, 3),
-        #            helper.float_trunc(avbl, 3),
-        #        )
-        print(avbl)
-        print("----------------")
-
-        print("3. Get price (XRPUSDT)")
-        r = client.get_instruments_info(category="spot", symbol="XRPUSDT")
-        print(r)
-        print("----------------")
-
-        qty = 10  # теперь это количество XRP
-        print(f"4. Place order XRP - {qty} XRP (XRPUSDT)")
-
-        r = helper.place_order(
-            category="spot",
-            symbol="XRPUSDT",
-            side="Sell",
-            order_type="Market",
-            qty=qty,
-            market_unit="baseCoin",  # используем baseCoin для указания количества в XRP
-        )
-        print(r)
-        print("----------------")
+        # Тестирование подключения и вывод информации
+        test_connection(helper)
+        # Тестирование размещения ордера
+        test_place_order(helper)
 
     except exceptions.InvalidRequestError as e:
         print("Ошибка запроса ByBit", e.status_code, e.message, sep=" | ")
     except exceptions.FailedRequestError as e:
-        print("Ошибка выполнения запроса ByBit", e.status_code, e.message, sep=" | ")
-    except exceptions.UnauthorizedExceptionError as e:
-        print("Ошибка авторизации ByBit", str(e), sep=" | ")
-    except exceptions.InvalidChannelTypeError as e:
-        print("Ошибка канала ByBit", str(e), sep=" | ")
-    except exceptions.TopicMismatchError as e:
-        print("Ошибка темы ByBit", str(e), sep=" | ")
-    except (KeyError, ValueError, TypeError) as e:
-        print("Ошибка обработки данных", str(e), sep=" | ")
-    except (ConnectionError, TimeoutError) as e:
-        print("Ошибка сети", str(e), sep=" | ")
-    except (OSError, IOError) as e:
-        print("Ошибка операции с файлом", str(e), sep=" | ")
-    except RuntimeError as e:
-        print("Ошибка выполнения", str(e), sep=" | ")
-    except AttributeError as e:
-        print("Ошибка ответа API", str(e), sep=" | ")
-    # trunk-ignore(pylint/W0718)
+        print("Ошибка выполнения", e.status_code, e.message, sep=" | ")
     except Exception as e:
-        print("Неизвестная ошибка", str(e), sep=" | ")
+        print("Ошибка выполнения |", str(e))
 
 
 if __name__ == "__main__":

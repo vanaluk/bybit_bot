@@ -225,6 +225,34 @@ class BybitHelper:
         except Exception as e:
             raise RuntimeError(f"Ошибка размещения ордера: {str(e)}")
 
+    def get_instrument_info(self, category: str, symbol: str) -> dict:
+        """
+        Получение информации об инструменте
+
+        Args:
+            category (str): Категория торговли (например, "spot", "linear")
+            symbol (str): Торговая пара (например, "BTCUSDT")
+
+        Returns:
+            dict: Информация об инструменте
+
+        Raises:
+            ValueError: Если клиент не инициализирован
+            RuntimeError: Если возникла ошибка при получении информации
+        """
+        if not self.client:
+            raise ValueError("HTTP клиент не инициализирован")
+
+        try:
+            response, _, headers = self.client.get_instruments_info(
+                category=category,
+                symbol=symbol
+            )
+            self.log_limits(headers)
+            return response
+        except Exception as e:
+            raise RuntimeError(f"Ошибка получения информации об инструменте: {str(e)}")
+
     @staticmethod
     def float_trunc(f: float, prec: int) -> float:
         """
