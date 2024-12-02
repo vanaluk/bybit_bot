@@ -13,6 +13,7 @@
 """
 
 import os
+import sys
 from dotenv import load_dotenv
 from pybit import exceptions
 from pybit.unified_trading import HTTP
@@ -24,6 +25,13 @@ load_dotenv()
 
 API_KEY = os.getenv("API_KEY")
 SECRET_KEY = os.getenv("SECRET_KEY")
+
+
+def print_usage():
+    """Выводит информацию об использовании скрипта"""
+    print("Usage: python bot.py <buy_amount> <coin>")
+    print("Example: python bot.py 100 XRP")
+    sys.exit(1)
 
 
 def main():
@@ -40,6 +48,17 @@ def main():
         exceptions.InvalidRequestError: Если произошла ошибка в API запросе
         exceptions.FailedRequestError: Если API запрос не удался
     """
+    # Проверяем аргументы командной строки
+    if len(sys.argv) != 3:
+        print_usage()
+
+    try:
+        buy_amount = float(sys.argv[1])
+        coin = sys.argv[2].upper()
+    except ValueError:
+        print("Error: buy_amount must be a number")
+        print_usage()
+
     try:
         if not API_KEY or not SECRET_KEY:
             raise ValueError("API_KEY или SECRET_KEY не найдены в переменных окружения")
@@ -55,10 +74,9 @@ def main():
 
         # Тестирование подключения и вывод информации
         test_connection(helper)
-        # Тестирование размещения ордера
-        # test_place_order(helper)
+        
         # Запуск торгового алгоритма
-        run_trailing_stop_strategy(helper, "XRP")
+        run_trailing_stop_strategy(helper, coin, buy_amount)
 
     except exceptions.InvalidRequestError as e:
         print("Ошибка запроса ByBit", e.status_code, e.message, sep=" | ")

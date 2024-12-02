@@ -11,7 +11,7 @@ from helpers import BybitHelper
 
 
 def run_trailing_stop_strategy(
-    helper: BybitHelper, coin: str, check_interval: int = 10
+    helper: BybitHelper, coin: str, buy_amount: float, check_interval: int = 10
 ):
     """
     Запуск торгового алгоритма
@@ -19,11 +19,11 @@ def run_trailing_stop_strategy(
     Args:
         helper: экземпляр BybitHelper
         coin: название монеты (например, "XRP")
+        buy_amount: сумма в USDT для покупки
         check_interval: интервал проверки цены в секундах
     """
     symbol = f"{coin}USDT"
     category = "spot"
-    buy_amount = 10  # сумма в USDT для покупки
     price_drop_threshold = -3  # порог падения цены для покупки
     price_rise_threshold = 5  # порог роста цены для продажи
     stop_loss_threshold = -10  # стоп-лосс (процент от точки входа)
