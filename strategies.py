@@ -25,7 +25,7 @@ def run_trailing_stop_strategy(
     """
     symbol = f"{coin}USDT"
     category = "spot"
-    price_drop_threshold = -3  # price drop threshold for buying
+    price_drop_threshold = -2  # price drop threshold for buying
     price_rise_threshold = 5  # price rise threshold for selling
     stop_loss_threshold = -10  # stop-loss (percentage from entry point)
     quick_rise_threshold = 2  # quick price rise threshold for buying
