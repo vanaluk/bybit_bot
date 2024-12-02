@@ -44,6 +44,24 @@ Currently implemented Trailing Stop strategy that:
 - Has configurable stop-loss and take-profit parameters
 - Supports custom buy amount and cryptocurrency selection
 
+## Logs
+
+The bot creates log files for each trading session in the `logs` directory. Log files are named using the following format:
+```
+logs/bybit_bot_{coin}_{buy_amount}_{timestamp}.log
+```
+
+For example:
+```
+logs/bybit_bot_XRP_100_20231225_120000.log
+```
+
+These logs contain detailed information about:
+- Trading decisions and executed orders
+- Price movements and strategy triggers
+- API interactions and responses
+- Errors and warnings
+
 ## Development Plans
 
 Future plans include:
