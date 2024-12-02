@@ -1,11 +1,12 @@
 """
-Торговые стратегии для Bybit бота
+Trading strategies for Bybit bot
 
-Этот модуль содержит различные торговые стратегии,
-которые могут быть использованы с Bybit API.
+This module contains various trading strategies
+that can be used with the Bybit API.
 """
 
 import time
+import logging
 from datetime import datetime
 from helpers import BybitHelper
 
@@ -14,57 +15,56 @@ def run_trailing_stop_strategy(
     helper: BybitHelper, coin: str, buy_amount: float, check_interval: int = 10
 ):
     """
-    Запуск торгового алгоритма
+    Run trading algorithm
 
     Args:
-        helper: экземпляр BybitHelper
-        coin: название монеты (например, "XRP")
-        buy_amount: сумма в USDT для покупки
-        check_interval: интервал проверки цены в секундах
+        helper: BybitHelper instance
+        coin: coin name (e.g., "XRP")
+        buy_amount: amount in USDT to buy
+        check_interval: price check interval in seconds
     """
     symbol = f"{coin}USDT"
     category = "spot"
-    price_drop_threshold = -3  # порог падения цены для покупки
-    price_rise_threshold = 5  # порог роста цены для продажи
-    stop_loss_threshold = -10  # стоп-лосс (процент от точки входа)
-    quick_rise_threshold = 2  # порог быстрого роста цены для покупки
-    entry_price = None  # цена входа в позицию
-    trailing_price = None  # цена для трейлинг-стопа
-    hours_period = 3  # период для отслеживания изменения цены
-    quick_period = 2  # период для отслеживания быстрого роста
+    price_drop_threshold = -3  # price drop threshold for buying
+    price_rise_threshold = 5  # price rise threshold for selling
+    stop_loss_threshold = -10  # stop-loss (percentage from entry point)
+    quick_rise_threshold = 2  # quick price rise threshold for buying
+    entry_price = None  # position entry price
+    trailing_price = None  # trailing stop price
+    hours_period = 3  # period for tracking price change
+    quick_period = 2  # period for tracking quick rise
 
-    print(f"Запуск алгоритма для {symbol}")
-    print(
-        f"Вход в позицию при:\n"
-        f"1) Падении на {abs(price_drop_threshold)}% за {hours_period} часа\n"
-        f"2) Быстром росте на {quick_rise_threshold}% за {quick_period} час"
+    logging.info(f"Starting algorithm for {symbol}")
+    logging.info(
+        f"Position entry conditions:\n"
+        f"1) Price drop of {abs(price_drop_threshold)}% over {hours_period} hours\n"
+        f"2) Quick rise of {quick_rise_threshold}% over {quick_period} hour"
     )
 
     while True:
         try:
-            # Получаем текущую цену и изменения за разные периоды
+            # Get current price and changes over different periods
             current_price = helper.get_price(category, symbol)
             price_change = helper.get_price_change(category, symbol, hours=hours_period)
             quick_price_change = helper.get_price_change(
                 category, symbol, hours=quick_period
             )
 
-            # Форматируем время для вывода
+            # Format time for output
             current_time = datetime.now().strftime("%H:%M:%S")
 
             if entry_price is None:
-                # Если мы не в позиции, ищем возможность для входа
-                print(
-                    f"[{current_time}] Цена {symbol}: {current_price:.4f} USDT "
-                    f"(Изменение за {hours_period}ч: {price_change:.2f}%, "
-                    f"за {quick_period}ч: {quick_price_change:.2f}%)",
-                    end="",
+                # If not in position, look for entry opportunity
+                logging.info(
+                    f"[{current_time}] {symbol} Price: {current_price:.4f} USDT "
+                    f"(Change over {hours_period}h: {price_change:.2f}%, "
+                    f"over {quick_period}h: {quick_price_change:.2f}%)"
                 )
 
-                # Проверяем условия входа
+                # Check entry conditions
                 if quick_price_change >= quick_rise_threshold:
-                    print(
-                        f"\nБыстрый рост! Цена выросла на {quick_price_change:.2f}% за последний час. Размещаем ордер на покупку."
+                    logging.info(
+                        f"\nQuick rise! Price increased by {quick_price_change:.2f}% in the last hour. Placing buy order."
                     )
                     r = helper.place_order(
                         category=category,
@@ -76,21 +76,20 @@ def run_trailing_stop_strategy(
                     )
 
                     if r.get("retCode") != 0:
-                        print(
-                            f"\nОшибка при размещении ордера на покупку: {r.get('retMsg')}"
-                        )
-                        raise Exception(f"Ошибка размещения ордера: {r.get('retMsg')}")
+                        error_msg = f"\nError placing buy order: {r.get('retMsg')}"
+                        logging.error(error_msg)
+                        raise Exception(f"Order placement error: {r.get('retMsg')}")
 
                     order_id = r.get("result", {}).get("orderId")
-                    print(f"Ордер на покупку размещен успешно. ID: {order_id}")
+                    logging.info(f"Buy order placed successfully. ID: {order_id}")
 
                     entry_price = current_price
                     trailing_price = current_price
-                    print(f"Вошли в позицию по цене: {entry_price:.4f} USDT")
+                    logging.info(f"Entered position at price: {entry_price:.4f} USDT")
 
                 elif price_change <= price_drop_threshold:
-                    print(
-                        f"\nЦена упала на {abs(price_change):.2f}% за {hours_period} часа. Размещаем ордер на покупку."
+                    logging.info(
+                        f"\nPrice dropped by {abs(price_change):.2f}% over {hours_period} hours. Placing buy order."
                     )
                     r = helper.place_order(
                         category=category,
@@ -102,21 +101,20 @@ def run_trailing_stop_strategy(
                     )
 
                     if r.get("retCode") != 0:
-                        print(
-                            f"\nОшибка при размещении ордера на покупку: {r.get('retMsg')}"
-                        )
-                        raise Exception(f"Ошибка размещения ордера: {r.get('retMsg')}")
+                        error_msg = f"\nError placing buy order: {r.get('retMsg')}"
+                        logging.error(error_msg)
+                        raise Exception(f"Order placement error: {r.get('retMsg')}")
 
                     order_id = r.get("result", {}).get("orderId")
-                    print(f"Ордер на покупку размещен успешно. ID: {order_id}")
+                    logging.info(f"Buy order placed successfully. ID: {order_id}")
 
                     entry_price = current_price
                     trailing_price = current_price
-                    print(f"Вошли в позицию по цене: {entry_price:.4f} USDT")
+                    logging.info(f"Entered position at price: {entry_price:.4f} USDT")
                 else:
-                    print(f" (Ждем сигнала)")
+                    logging.info(" (Waiting for signal)")
             else:
-                # Если мы в позиции, проверяем условия для трейлинга или выхода
+                # If in position, check trailing or exit conditions
                 price_change_from_trailing = (
                     (current_price - trailing_price) / trailing_price
                 ) * 100
@@ -124,17 +122,16 @@ def run_trailing_stop_strategy(
                     (current_price - entry_price) / entry_price
                 ) * 100
 
-                print(
-                    f"[{current_time}] Цена {symbol}: {current_price:.4f} USDT",
-                    f"(От точки входа: {total_change_from_entry:.2f}%,",
-                    f"От трейлинга: {price_change_from_trailing:.2f}%)",
-                    end="",
+                logging.info(
+                    f"[{current_time}] {symbol} Price: {current_price:.4f} USDT "
+                    f"(From entry: {total_change_from_entry:.2f}%, "
+                    f"From trailing: {price_change_from_trailing:.2f}%)"
                 )
 
                 if total_change_from_entry <= stop_loss_threshold:
-                    # Если цена упала ниже стоп-лосса, закрываем позицию
-                    print(
-                        f"\nСработал стоп-лосс! Цена упала на {abs(total_change_from_entry):.2f}% от точки входа. Размещаем ордер на продажу."
+                    # If price falls below stop-loss, close position
+                    logging.info(
+                        f"\nStop-loss triggered! Price dropped by {abs(total_change_from_entry):.2f}% from entry point. Placing sell order."
                     )
                     r = helper.place_order(
                         category=category,
@@ -146,35 +143,34 @@ def run_trailing_stop_strategy(
                     )
 
                     if r.get("retCode") != 0:
-                        print(
-                            f"\nОшибка при размещении ордера на продажу: {r.get('retMsg')}"
-                        )
-                        raise Exception(f"Ошибка размещения ордера: {r.get('retMsg')}")
+                        error_msg = f"\nError placing sell order: {r.get('retMsg')}"
+                        logging.error(error_msg)
+                        raise Exception(f"Order placement error: {r.get('retMsg')}")
 
                     order_id = r.get("result", {}).get("orderId")
-                    print(f"Ордер на продажу размещен успешно. ID: {order_id}")
+                    logging.info(f"Sell order placed successfully. ID: {order_id}")
 
-                    print(f"Закрыли позицию по цене: {current_price:.4f} USDT")
-                    print(f"Убыток: {total_change_from_entry:.2f}%")
+                    logging.info(f"Closed position at price: {current_price:.4f} USDT")
+                    logging.info(f"Loss: {total_change_from_entry:.2f}%")
                     entry_price = None
                     trailing_price = None
 
                 elif price_change_from_trailing >= price_rise_threshold:
-                    # Если цена выросла выше порога, обновляем трейлинг
+                    # If price rises above threshold, update trailing
                     old_trailing = trailing_price
                     trailing_price = current_price
-                    print(
-                        f"\nЦена выросла на {price_change_from_trailing:.2f}% от последней точки трейлинга."
+                    logging.info(
+                        f"\nPrice increased by {price_change_from_trailing:.2f}% from last trailing point."
                     )
-                    print(
-                        f"Обновляем точку трейлинга: {old_trailing:.4f} -> {trailing_price:.4f} USDT"
+                    logging.info(
+                        f"Updating trailing point: {old_trailing:.4f} -> {trailing_price:.4f} USDT"
                     )
-                    print(f"Общая прибыль от входа: {total_change_from_entry:.2f}%")
+                    logging.info(f"Total profit from entry: {total_change_from_entry:.2f}%")
 
                 elif price_change_from_trailing <= price_drop_threshold:
-                    # Если цена упала ниже порога от максимума, продаем
-                    print(
-                        f"\nЦена упала на {abs(price_change_from_trailing):.2f}% от точки трейлинга. Размещаем ордер на продажу."
+                    # If price drops below threshold from maximum, sell
+                    logging.info(
+                        f"\nPrice dropped by {abs(price_change_from_trailing):.2f}% from trailing point. Placing sell order."
                     )
                     r = helper.place_order(
                         category=category,
@@ -186,24 +182,23 @@ def run_trailing_stop_strategy(
                     )
 
                     if r.get("retCode") != 0:
-                        print(
-                            f"\nОшибка при размещении ордера на продажу: {r.get('retMsg')}"
-                        )
-                        raise Exception(f"Ошибка размещения ордера: {r.get('retMsg')}")
+                        error_msg = f"\nError placing sell order: {r.get('retMsg')}"
+                        logging.error(error_msg)
+                        raise Exception(f"Order placement error: {r.get('retMsg')}")
 
                     order_id = r.get("result", {}).get("orderId")
-                    print(f"Ордер на продажу размещен успешно. ID: {order_id}")
+                    logging.info(f"Sell order placed successfully. ID: {order_id}")
 
-                    print(f"Закрыли позицию по цене: {current_price:.4f} USDT")
-                    print(f"Итоговая прибыль: {total_change_from_entry:.2f}%")
+                    logging.info(f"Closed position at price: {current_price:.4f} USDT")
+                    logging.info(f"Final profit: {total_change_from_entry:.2f}%")
                     entry_price = None
                     trailing_price = None
                 else:
-                    print(f" (Следим за ценой)")
+                    logging.info(" (Monitoring price)")
 
             time.sleep(check_interval)
 
         except Exception as e:
-            print(f"\nКритическая ошибка: {str(e)}")
-            print("Останавливаем программу...")
+            logging.error(f"\nCritical error: {str(e)}")
+            logging.error("Stopping program...")
             break

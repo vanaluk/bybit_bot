@@ -1,9 +1,9 @@
 """
-Вспомогательные функции для торговли на Bybit
+Helper functions for trading on Bybit
 
-Этот модуль содержит вспомогательные функции для взаимодействия с API Bybit,
-включая функции для получения информации об аккаунте, логирования переводов
-и мониторинга лимитов API.
+This module contains helper functions for interacting with the Bybit API,
+including functions for getting account information, logging transfers,
+and monitoring API limits.
 """
 
 import pandas as pd
@@ -14,43 +14,43 @@ import time
 
 class BybitHelper:
     """
-    Класс-помощник для работы с Bybit API
+    Helper class for working with Bybit API
     """
 
     def __init__(self, client: HTTP = None):
         """
-        Инициализация помощника
+        Initialize helper
 
         Args:
-            client (HTTP, optional): HTTP клиент Bybit. По умолчанию None
+            client (HTTP, optional): Bybit HTTP client. Defaults to None
         """
         self.client = client
 
     @staticmethod
     def log_limits(headers: dict):
         """
-        Логирование лимитов API запросов.
+        Log API request limits.
 
-        Аргументы:
-            headers (dict): Заголовки ответа API, содержащие информацию о лимитах
+        Args:
+            headers (dict): API response headers containing limit information
         """
         print(
-            f"Лимиты  {headers.get('X-Bapi-Limit-Status')} / {headers.get('X-Bapi-Limit')}"
+            f"Limits {headers.get('X-Bapi-Limit-Status')} / {headers.get('X-Bapi-Limit')}"
         )
 
     def assets(self):
         """
-        Получение балансов для UNIFIED торгового аккаунта.
+        Get balances for UNIFIED trading account.
 
-        Примечание: Этот метод показывает балансы только для UNIFIED аккаунта и не
-        отображает полные балансы кошелька. Детали копи-трейдинга, фандинга и
-        инверсных аккаунтов не включены.
+        Note: This method shows balances only for UNIFIED account and does not
+        show full wallet balances. Copy trading, funding, and inverse
+        account details are not included.
 
-        Возвращает:
-            dict: Информация об активах аккаунта
+        Returns:
+            dict: Account asset information
         """
         if not self.client:
-            raise ValueError("HTTP клиент не инициализирован")
+            raise ValueError("HTTP client not initialized")
 
         r, _, h = self.client.get_wallet_balance(accountType="UNIFIED")
         r = r.get("result", {}).get("list", [])[0]
@@ -68,17 +68,17 @@ class BybitHelper:
 
     def get_transfers(self):
         """
-        Получение и логирование записей о переводах средств для аккаунта.
+        Get and log fund transfer records for the account.
 
-        Эта функция получает транзакции переводов без пагинации.
-        Создает DataFrame с информацией о переводах и сортирует
-        транзакции по временной метке в порядке убывания.
+        This function retrieves transfer transactions without pagination.
+        Creates a DataFrame with transfer information and sorts
+        transactions by timestamp in descending order.
 
-        Возвращает:
-            pandas.DataFrame: DataFrame, содержащий детали транзакций переводов
+        Returns:
+            pandas.DataFrame: DataFrame containing transfer transaction details
         """
         if not self.client:
-            raise ValueError("HTTP клиент не инициализирован")
+            raise ValueError("HTTP client not initialized")
 
         r, _, h = self.client.get_transaction_log()
 
@@ -104,56 +104,56 @@ class BybitHelper:
 
     def get_assets(self, coin: str) -> float:
         """
-        Получение доступного баланса конкретной монеты на аккаунте
+        Get available balance for a specific coin on the account
 
         Args:
-            coin (str): Название монеты (например, "BTC", "ETH", "USDT")
+            coin (str): Coin name (e.g. "BTC", "ETH", "USDT")
 
         Returns:
-            float: Доступный баланс монеты для вывода
+            float: Available balance for withdrawal
 
         Raises:
-            ValueError: Если клиент не инициализирован или название монеты пустое
-            RuntimeError: Если ответ API имеет неожиданный формат
+            ValueError: If client is not initialized or coin name is empty
+            RuntimeError: If API response has unexpected format
         """
         if not self.client:
-            raise ValueError("HTTP клиент не инициализирован")
+            raise ValueError("HTTP client not initialized")
         if not coin:
-            raise ValueError("Не указано название монеты")
+            raise ValueError("Coin name not specified")
 
         try:
-            # API возвращает кортеж (response, cursor, headers)
+            # API returns a tuple (response, cursor, headers)
             response, _, headers = self.client.get_wallet_balance(accountType="UNIFIED")
             if not response:
-                raise RuntimeError("Пустой ответ от API")
+                raise RuntimeError("Empty response from API")
 
-            # Получаем список монет из ответа
+            # Get list of coins from response
             account_data = response.get("result", {}).get("list", [])
             if not account_data:
                 return 0.0
 
-            # Получаем информацию о монетах
+            # Get coin information
             coins_data = account_data[0].get("coin", [])
             if not coins_data:
                 return 0.0
 
-            # Создаем словарь с балансами монет
+            # Create a dictionary with coin balances
             balances = {
                 asset.get("coin"): float(asset.get("availableToWithdraw", "0.0"))
                 for asset in coins_data
-                if asset.get("coin")  # Проверяем, что название монеты существует
+                if asset.get("coin")  # Check if coin name exists
             }
 
-            # Логируем лимиты API
+            # Log API limits
             self.log_limits(headers)
 
-            # Возвращаем баланс запрошенной монеты или 0.0, если монета не найдена
+            # Return balance for requested coin or 0.0 if coin not found
             return self.round_down(balances.get(coin, 0.0), 3)
 
         except (KeyError, IndexError) as e:
-            raise RuntimeError(f"Неожиданный формат ответа API: {str(e)}")
+            raise RuntimeError(f"Unexpected API response format: {str(e)}")
         except ValueError as e:
-            raise RuntimeError(f"Ошибка преобразования значения: {str(e)}")
+            raise RuntimeError(f"Value conversion error: {str(e)}")
 
     def place_order(
         self,
@@ -165,36 +165,34 @@ class BybitHelper:
         market_unit: str = "quoteCoin",
     ) -> dict:
         """
-        Размещение ордера на бирже
+        Place an order
 
         Args:
-            category (str): Категория торговли (например, "linear", "spot")
-            symbol (str): Торговая пара (например, "BTCUSDT")
-            side (str): Сторона ордера ("Buy" или "Sell")
-            order_type (str): Тип ордера (например, "Market", "Limit")
-            qty (float): Количество для торговли
-            market_unit (str, optional): Единица измерения. По умолчанию "quoteCoin"
+            category (str): Market category (e.g. "linear", "spot")
+            symbol (str): Trading pair symbol (e.g. "BTCUSDT")
+            side (str): Order side ("Buy" or "Sell")
+            order_type (str): Order type (e.g. "Market", "Limit")
+            qty (float): Order quantity
+            market_unit (str, optional): Unit for market orders. Defaults to "quoteCoin"
 
         Returns:
-            dict: Информация о размещенном ордере
+            dict: Order placement result
 
         Raises:
-            ValueError: Если клиент не инициализирован или параметры некорректны
-            RuntimeError: Если возникла ошибка при размещении ордера
+            ValueError: If client is not initialized or order parameters are invalid
+            RuntimeError: If order placement fails
         """
         if not self.client:
-            raise ValueError("HTTP клиент не инициализирован")
+            raise ValueError("HTTP client not initialized")
         if not all([category, symbol, side, order_type]):
-            raise ValueError("Не указаны обязательные параметры ордера")
+            raise ValueError("Order parameters not specified")
         if qty <= 0:
-            raise ValueError("Количество должно быть больше 0")
+            raise ValueError("Quantity must be greater than 0")
         if side not in ["Buy", "Sell"]:
-            raise ValueError(
-                'Некорректная сторона ордера. Используйте "Buy" или "Sell"'
-            )
+            raise ValueError('Invalid order side. Use "Buy" or "Sell"')
 
         try:
-            # Получаем информацию о минимальном размере ордера
+            # Get minimum order quantity
             instrument_info, _, _ = self.client.get_instruments_info(
                 category=category, symbol=symbol
             )
@@ -205,10 +203,10 @@ class BybitHelper:
             )
             min_order_qty = float(lot_size_filter.get("minOrderQty", "0.0"))
 
-            # Проверяем минимальный размер ордера
+            # Check minimum order quantity
             if qty < min_order_qty:
                 raise ValueError(
-                    f"Количество {qty} меньше минимально допустимого {min_order_qty}"
+                    f"Quantity {qty} is less than minimum allowed {min_order_qty}"
                 )
 
             response, _, headers = self.client.place_order(
@@ -224,25 +222,25 @@ class BybitHelper:
             return response
 
         except Exception as e:
-            raise RuntimeError(f"Ошибка размещения ордера: {str(e)}")
+            raise RuntimeError(f"Order placement failed: {str(e)}")
 
     def get_instrument_info(self, category: str, symbol: str) -> dict:
         """
-        Получение информации об инструменте
+        Get instrument information
 
         Args:
-            category (str): Категория торговли (например, "spot", "linear")
-            symbol (str): Торговая пара (например, "BTCUSDT")
+            category (str): Market category (e.g. "spot", "linear")
+            symbol (str): Trading pair symbol (e.g. "BTCUSDT")
 
         Returns:
-            dict: Информация об инструменте
+            dict: Instrument information
 
         Raises:
-            ValueError: Если клиент не инициализирован
-            RuntimeError: Если возникла ошибка при получении информации
+            ValueError: If client is not initialized
+            RuntimeError: If instrument information retrieval fails
         """
         if not self.client:
-            raise ValueError("HTTP клиент не инициализирован")
+            raise ValueError("HTTP client not initialized")
 
         try:
             response, _, headers = self.client.get_instruments_info(
@@ -252,134 +250,74 @@ class BybitHelper:
             self.log_limits(headers)
             return response
         except Exception as e:
-            raise RuntimeError(f"Ошибка получения информации об инструменте: {str(e)}")
+            raise RuntimeError(f"Instrument information retrieval failed: {str(e)}")
 
     def get_price(self, category: str, symbol: str) -> float:
         """
-        Получение текущей цены инструмента
+        Get current price for a symbol
 
         Args:
-            category (str): Категория торговли (например, "spot", "linear")
-            symbol (str): Торговая пара (например, "BTCUSDT")
+            category: Market category (spot, linear, inverse)
+            symbol: Trading pair symbol (e.g. BTCUSDT)
 
         Returns:
-            float: Текущая цена
-
-        Raises:
-            ValueError: Если клиент не инициализирован
-            RuntimeError: Если возникла ошибка при получении цены
+            float: Current price
         """
         if not self.client:
-            raise ValueError("HTTP клиент не инициализирован")
+            raise ValueError("HTTP client not initialized")
 
-        try:
-            response, _, headers = self.client.get_tickers(
-                category=category,
-                symbol=symbol
-            )
-            self.log_limits(headers)
+        r, _, h = self.client.get_tickers(category=category, symbol=symbol)
+        self.log_limits(h)
 
-            # Получаем цену последней сделки
-            price = float(
-                response.get("result", {}).get("list", [])[0].get("lastPrice", "0.0")
-            )
-            return price
-        except Exception as e:
-            raise RuntimeError(f"Ошибка получения цены: {str(e)}")
+        return float(r.get("result", {}).get("list", [{}])[0].get("lastPrice", "0"))
 
     def get_price_change(self, category: str, symbol: str, hours: int = 1) -> float:
         """
-        Получить изменение цены за указанный период в процентах
+        Get price change percentage over specified period
 
         Args:
-            category: Категория торгов (например, "spot")
-            symbol: Торговая пара (например, "BTCUSDT")
-            hours: Количество часов для расчета изменения цены (по умолчанию 1)
+            category: Market category (spot, linear, inverse)
+            symbol: Trading pair symbol (e.g. BTCUSDT)
+            hours: Number of hours to calculate change over
 
         Returns:
-            float: Процентное изменение цены
+            float: Price change percentage
         """
-        try:
-            # Получаем текущее время в миллисекундах
-            current_time = int(time.time() * 1000)
-            # Получаем время hours часов назад
-            past_time = current_time - (hours * 60 * 60 * 1000)
+        if not self.client:
+            raise ValueError("HTTP client not initialized")
 
-            print(f"\nЗапрос исторических данных:")
-            print(f"- Категория: {category}")
-            print(f"- Символ: {symbol}")
-            print(f"- Интервал: 60 минут")
-            print(f"- Начальное время: {past_time}")
-            print(f"- Конечное время: {current_time}")
-            print(f"- Лимит: {hours + 1}")
+        # Get current price
+        current_price = self.get_price(category, symbol)
 
-            # Получаем исторические данные
-            kline_data, response_info, headers = self.client.get_kline(
-                category=category,
-                symbol=symbol,
-                interval="60",  # используем часовые свечи
-                start=past_time,
-                end=current_time,
-                limit=hours + 1,  # получаем данные за указанное количество часов
-            )
+        # Get klines data
+        interval = "60"  # 1 hour intervals
+        limit = hours  # Number of candles to get
+        r, _, h = self.client.get_kline(
+            category=category,
+            symbol=symbol,
+            interval=interval,
+            limit=limit,
+        )
+        self.log_limits(h)
 
-            # Логируем лимиты
-            self.log_limits(headers)
+        # Get price from hours ago
+        old_price = float(r.get("result", {}).get("list", [[0]])[0][1])  # Open price
 
-            print("\nОтвет от API:")
-            print(f"- Данные: {kline_data}")
-            print(f"- Информация об ответе: {response_info}")
-
-            if (
-                isinstance(kline_data, dict)
-                and kline_data.get("retCode") == 0
-                and "result" in kline_data
-                and "list" in kline_data["result"]
-            ):
-                candles = kline_data['result']['list']
-                if len(candles) > 0:
-                    print(f"\nПолучено свечей: {len(candles)}")
-                    print(f"Первая свеча (новая): {candles[0]}")
-                    print(f"Последняя свеча (старая): {candles[-1]}")
-
-                    # Структура свечи: [timestamp, open, high, low, close, volume, turnover]
-                    oldest_candle = candles[-1]
-                    past_price = float(oldest_candle[4])  # индекс 4 - цена закрытия
-                    print(f"\nЦена {hours} часов назад: {past_price}")
-
-                    # Получаем текущую цену
-                    current_price = self.get_price(category, symbol)
-                    print(f"Текущая цена: {current_price}")
-
-                    # Вычисляем процентное изменение
-                    price_change = ((current_price - past_price) / past_price) * 100
-                    print(
-                        f"Расчет изменения: ({current_price} - {past_price}) / {past_price} * 100 = {price_change}%"
-                    )
-
-                    return price_change
-
-            print("\nНе удалось получить данные свечей")
-            return 0.0
-
-        except Exception as e:
-            print(f"\nОшибка при получении изменения цены: {str(e)}")
-            print(f"Тип ошибки: {type(e)}")
-            import traceback
-            print("Traceback:")
-            print(traceback.format_exc())
-            return 0.0
+        # Calculate percentage change
+        if old_price == 0:
+            return 0
+        return ((current_price - old_price) / old_price) * 100
 
     def round_down(self, value: float, decimals: int) -> float:
         """
-        Отбрасываем от float лишнее
+        Remove excess from float
 
         Args:
-            value (float): Число для обработки
-            decimals (int): Количество знаков после запятой
+            value (float): Number to process
+            decimals (int): Number of decimal places
 
         Returns:
-            float: Обработанное число
+            float: Processed number
         """
         multiplier = 10**decimals
         return float(int(value * multiplier)) / multiplier

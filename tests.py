@@ -1,45 +1,46 @@
 """
-Тестовые функции для проверки работы Bybit API
+Test functions for checking Bybit API functionality
 
-Этот модуль содержит функции для тестирования подключения
-и основных операций с Bybit API.
+This module contains functions for testing connection
+and basic operations with Bybit API.
 """
 
+import logging
 from helpers import BybitHelper
 
 
 def test_connection(helper: BybitHelper):
     """
-    Проверка подключения и вывод информации о балансах и ценах
+    Test connection and display balance and price information
 
     Args:
-        helper: экземпляр BybitHelper
+        helper: BybitHelper instance
     """
-    print("1. Get all balance")
+    logging.info("1. Get all balance")
     helper.assets()
-    print("----------------")
+    logging.info("----------------")
 
-    print("2. Get available coin balance (XRP)")
+    logging.info("2. Get available coin balance (XRP)")
     avbl = helper.get_assets("XRP")
-    print(avbl)
-    print("----------------")
+    logging.info(str(avbl))
+    logging.info("----------------")
 
-    print("3. Get price (XRPUSDT)")
+    logging.info("3. Get price (XRPUSDT)")
     r = helper.get_instrument_info(category="spot", symbol="XRPUSDT")
-    print(r)
-    print("----------------")
+    logging.info(str(r))
+    logging.info("----------------")
 
 
 def test_place_order(helper: BybitHelper):
     """
-    Тестирование размещения ордера
+    Test order placement
     
     Args:
-        helper: экземпляр BybitHelper
+        helper: BybitHelper instance
     """
-    # Размещение ордера
-    qty = 10  # теперь это количество XRP
-    print(f"4. Place order XRP - {qty} XRP (XRPUSDT)")
+    # Place order
+    qty = 10  # amount in XRP
+    logging.info(f"4. Place order XRP - {qty} XRP (XRPUSDT)")
     r = helper.place_order(
         category="spot",
         symbol="XRPUSDT",
@@ -48,5 +49,5 @@ def test_place_order(helper: BybitHelper):
         qty=qty,
         market_unit="baseCoin",
     )
-    print(r)
-    print("----------------")
+    logging.info(str(r))
+    logging.info("----------------")

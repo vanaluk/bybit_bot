@@ -1,25 +1,27 @@
 """
-Утилита торгового бота для Bybit
+Bybit Trading Bot Utility
 
-Этот модуль предоставляет утилиты для взаимодействия
-с торговой платформой Bybit.
-Включает функциональность для:
-- Получения информации об активах
-- Получения и логирования переводов средств
-- Обработки API запросов и аутентификации
+This module provides utilities for interacting
+with the Bybit trading platform.
+Includes functionality for:
+- Getting account asset information
+- Getting and logging fund transfers
+- Handling API requests and authentication
 
-Скрипт использует переменные окружения для API ключа и секрета.
-Требует библиотеки pybit и python-dotenv для взаимодействия с API и управления окружением.
+Script uses environment variables for API key and secret.
+Requires pybit and python-dotenv libraries for API interaction and environment management.
 """
 
 import os
 import sys
+import logging
 from dotenv import load_dotenv
 from pybit import exceptions
 from pybit.unified_trading import HTTP
 from helpers import BybitHelper
 from tests import test_connection
 from strategies import run_trailing_stop_strategy
+from logger import setup_logger
 
 load_dotenv()
 
@@ -28,7 +30,7 @@ SECRET_KEY = os.getenv("SECRET_KEY")
 
 
 def print_usage():
-    """Выводит информацию об использовании скрипта"""
+    """Prints script usage information"""
     print("Usage: python bot.py <buy_amount> <coin>")
     print("Example: python bot.py 100 XRP")
     sys.exit(1)
@@ -36,19 +38,19 @@ def print_usage():
 
 def main():
     """
-    Основная функция для выполнения операций торгового бота Bybit.
+    Main function for executing Bybit trading bot operations.
 
-    Эта функция:
-    1. Инициализирует HTTP клиент Bybit с учетными данными API
-    2. Получает информацию об активах аккаунта
-    3. Получает и логирует переводы средств
-    4. Обрабатывает возможные ошибки API запросов
+    This function:
+    1. Initializes Bybit HTTP client with API credentials
+    2. Gets account asset information
+    3. Gets and logs fund transfers
+    4. Handles possible API request errors
 
-    Исключения:
-        exceptions.InvalidRequestError: Если произошла ошибка в API запросе
-        exceptions.FailedRequestError: Если API запрос не удался
+    Exceptions:
+        exceptions.InvalidRequestError: If there's an error in API request
+        exceptions.FailedRequestError: If API request fails
     """
-    # Проверяем аргументы командной строки
+    # Check command line arguments
     if len(sys.argv) != 3:
         print_usage()
 
@@ -59,9 +61,12 @@ def main():
         print("Error: buy_amount must be a number")
         print_usage()
 
+    # Set up logging
+    logger = setup_logger(coin, buy_amount)
+
     try:
         if not API_KEY or not SECRET_KEY:
-            raise ValueError("API_KEY или SECRET_KEY не найдены в переменных окружения")
+            raise ValueError("API_KEY or SECRET_KEY not found in environment variables")
 
         client = HTTP(
             api_key=API_KEY,
@@ -72,18 +77,18 @@ def main():
 
         helper = BybitHelper(client)
 
-        # Тестирование подключения и вывод информации
+        # Test connection and display information
         test_connection(helper)
-        
-        # Запуск торгового алгоритма
+
+        # Start trading algorithm
         run_trailing_stop_strategy(helper, coin, buy_amount)
 
     except exceptions.InvalidRequestError as e:
-        print("Ошибка запроса ByBit", e.status_code, e.message, sep=" | ")
+        logging.error(f"ByBit request error | {e.status_code} | {e.message}")
     except exceptions.FailedRequestError as e:
-        print("Ошибка выполнения", e.status_code, e.message, sep=" | ")
+        logging.error(f"Execution error | {e.status_code} | {e.message}")
     except Exception as e:
-        print("Ошибка выполнения |", str(e))
+        logging.error(f"Execution error | {str(e)}")
 
 
 if __name__ == "__main__":
