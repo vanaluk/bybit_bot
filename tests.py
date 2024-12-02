@@ -40,7 +40,7 @@ def test_place_order(helper: BybitHelper):
     """
     # Place order
     qty = 10  # amount in XRP
-    logging.info(f"4. Place order XRP - {qty} XRP (XRPUSDT)")
+    logging.info(f"4. Place order - {qty} XRP (XRPUSDT)")
     r = helper.place_order(
         category="spot",
         symbol="XRPUSDT",

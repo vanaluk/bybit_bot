@@ -34,9 +34,10 @@ class BybitHelper:
         Args:
             headers (dict): API response headers containing limit information
         """
-        print(
-            f"Limits {headers.get('X-Bapi-Limit-Status')} / {headers.get('X-Bapi-Limit')}"
-        )
+        # print(
+        #     f"Limits {headers.get('X-Bapi-Limit-Status')} / {headers.get('X-Bapi-Limit')}"
+        # )
+        pass
 
     def assets(self):
         """
@@ -64,7 +65,7 @@ class BybitHelper:
         print("\n".join(coins))
         print(f"---\nTotal: {total_balance:>18.2f}\n")
 
-        self.log_limits(h)
+        # self.log_limits(h)
 
     def get_transfers(self):
         """
@@ -100,7 +101,7 @@ class BybitHelper:
         df.sort_values(by=["transactionTime"], inplace=True, ascending=False)
         print(df)
 
-        self.log_limits(h)
+        # self.log_limits(h)
 
     def get_assets(self, coin: str) -> float:
         """
@@ -145,7 +146,7 @@ class BybitHelper:
             }
 
             # Log API limits
-            self.log_limits(headers)
+            # self.log_limits(headers)
 
             # Return balance for requested coin or 0.0 if coin not found
             return self.round_down(balances.get(coin, 0.0), 3)
@@ -218,7 +219,7 @@ class BybitHelper:
                 marketUnit=market_unit,
             )
 
-            self.log_limits(headers)
+            # self.log_limits(headers)
             return response
 
         except Exception as e:
@@ -247,7 +248,7 @@ class BybitHelper:
                 category=category,
                 symbol=symbol
             )
-            self.log_limits(headers)
+            # self.log_limits(headers)
             return response
         except Exception as e:
             raise RuntimeError(f"Instrument information retrieval failed: {str(e)}")
@@ -267,7 +268,7 @@ class BybitHelper:
             raise ValueError("HTTP client not initialized")
 
         r, _, h = self.client.get_tickers(category=category, symbol=symbol)
-        self.log_limits(h)
+        # self.log_limits(h)
 
         return float(r.get("result", {}).get("list", [{}])[0].get("lastPrice", "0"))
 
@@ -298,7 +299,7 @@ class BybitHelper:
             interval=interval,
             limit=limit,
         )
-        self.log_limits(h)
+        # self.log_limits(h)
 
         # Get price from hours ago
         old_price = float(r.get("result", {}).get("list", [[0]])[0][1])  # Open price
