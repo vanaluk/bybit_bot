@@ -1,3 +1,0 @@
-[MASTER]
-init-hook='import sys; sys.path.append("/home/vanaluk/Work/bybit_bot//venv/lib/python3.12/site-packages/")'
-extension-pkg-whitelist=/home/vanaluk/Work/bybit_bot//venv/lib/python3.12/site-packages/
