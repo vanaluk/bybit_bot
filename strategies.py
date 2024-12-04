@@ -12,7 +12,7 @@ from helpers import BybitHelper
 
 
 def run_trailing_stop_strategy(
-    helper: BybitHelper, coin: str, buy_amount: float, check_interval: int = 10
+    helper: BybitHelper, coin: str, buy_amount: float, check_interval: int = 5
 ):
     """
     Run trading algorithm
@@ -25,14 +25,18 @@ def run_trailing_stop_strategy(
     """
     symbol = f"{coin}USDT"
     category = "spot"
-    price_drop_threshold = -2  # price drop threshold for buying
-    price_rise_threshold = 5  # price rise threshold for selling
+    # buying
+    price_drop_threshold = -3  # price drop threshold for buying
+    hours_period = 3  # period for tracking price change for entry
+    quick_rise_threshold = 3  # quick price rise threshold for buying
+    quick_period = 1  # period for tracking quick rise
+    # selling
+    price_rise_threshold = 1  # price rise threshold for selling
+    monitoring_period = 1  # period for tracking price change after entry
     stop_loss_threshold = -10  # stop-loss (percentage from entry point)
-    quick_rise_threshold = 2  # quick price rise threshold for buying
     entry_price = None  # position entry price
     trailing_price = None  # trailing stop price
-    hours_period = 3  # period for tracking price change
-    quick_period = 2  # period for tracking quick rise
+    position_size = None  # amount of coins bought
 
     logging.info(f"Starting algorithm for {symbol}")
     logging.info(
@@ -85,7 +89,9 @@ def run_trailing_stop_strategy(
 
                     entry_price = current_price
                     trailing_price = current_price
+                    position_size = buy_amount / current_price
                     logging.info(f"Entered position at price: {entry_price:.4f} USDT")
+                    logging.info(f"Position size: {position_size:.4f} {coin}")
 
                 elif price_change <= price_drop_threshold:
                     logging.info(
@@ -110,7 +116,9 @@ def run_trailing_stop_strategy(
 
                     entry_price = current_price
                     trailing_price = current_price
+                    position_size = buy_amount / current_price
                     logging.info(f"Entered position at price: {entry_price:.4f} USDT")
+                    logging.info(f"Position size: {position_size:.4f} {coin}")
                 else:
                     logging.info(" (Waiting for signal)")
             else:
@@ -122,10 +130,16 @@ def run_trailing_stop_strategy(
                     (current_price - entry_price) / entry_price
                 ) * 100
 
+                # Get price change for monitoring period
+                monitoring_price_change = helper.get_price_change(
+                    category, symbol, hours=monitoring_period
+                )
+
                 logging.info(
                     f"[{current_time}] {symbol} Price: {current_price:.4f} USDT "
                     f"(From entry: {total_change_from_entry:.2f}%, "
-                    f"From trailing: {price_change_from_trailing:.2f}%)"
+                    f"From trailing: {price_change_from_trailing:.2f}%, "
+                    f"Change over {monitoring_period}h: {monitoring_price_change:.2f}%)"
                 )
 
                 if total_change_from_entry <= stop_loss_threshold:
@@ -138,8 +152,7 @@ def run_trailing_stop_strategy(
                         symbol=symbol,
                         side="Sell",
                         order_type="Market",
-                        qty=buy_amount,
-                        market_unit="quoteCoin",
+                        qty=position_size,
                     )
 
                     if r.get("retCode") != 0:
@@ -154,6 +167,7 @@ def run_trailing_stop_strategy(
                     logging.info(f"Loss: {total_change_from_entry:.2f}%")
                     entry_price = None
                     trailing_price = None
+                    position_size = None
 
                 elif price_change_from_trailing >= price_rise_threshold:
                     # If price rises above threshold, update trailing
@@ -177,8 +191,7 @@ def run_trailing_stop_strategy(
                         symbol=symbol,
                         side="Sell",
                         order_type="Market",
-                        qty=buy_amount,
-                        market_unit="quoteCoin",
+                        qty=position_size,
                     )
 
                     if r.get("retCode") != 0:
@@ -193,6 +206,7 @@ def run_trailing_stop_strategy(
                     logging.info(f"Final profit: {total_change_from_entry:.2f}%")
                     entry_price = None
                     trailing_price = None
+                    position_size = None
                 else:
                     logging.info(" (Monitoring price)")
 
