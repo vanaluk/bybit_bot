@@ -15,13 +15,54 @@ def run_trailing_stop_strategy(
     helper: BybitHelper, coin: str, buy_amount: float, check_interval: int = 5
 ):
     """
-    Run trading algorithm
+    Trading strategy with trailing stop and dual entry conditions.
+
+    Algorithm workflow:
+
+    1. Entry Point Search (checks every 5 seconds):
+    - Option 1: Price drop of 3% over 3 hours (price_drop_threshold = -3, hours_period = 3)
+    - Option 2: Quick rise of 3% over 1 hour (quick_rise_threshold = 3, quick_period = 1)
+    - Buys for buy_amount in USDT
+
+    2. After Position Entry:
+    - Saves number of coins bought: position_size = buy_amount / current_price
+    - Sets initial points:
+        * entry_price = entry price
+        * trailing_price = entry price
+
+    3. Position Management (monitoring every 5 seconds):
+    - Logs display:
+        * Change from entry
+        * Change from trailing level
+        * Change over last hour
+
+    - Trailing Update:
+        * If price rises 3% from trailing level (trailing_update_threshold = 3)
+        * Moves trailing stop to current price
+        * Logs new level and total profit
+
+    - Position Exit:
+        * If price falls 1% from trailing level (trailing_drop_threshold = -1)
+        * Sells ALL purchased coins (position_size)
+        * Logs final profit
+        * Resets all position variables
+
+    Current settings features:
+    1. Quick trailing stop trigger (just 1% drop)
+    2. Significant trailing update (only on 3% rise)
+    3. Same thresholds for quick entry and trailing update (3%)
+    4. Relatively long period for drop entry (3 hours)
+
+    Algorithm is tuned for:
+    - Quick profit taking (sell at -1% from maximum)
+    - Protection from false trailing updates (needs +3% rise)
+    - Finding both long-term dips (-3% over 3h) and quick movements (+3% over 1h)
 
     Args:
         helper: BybitHelper instance
         coin: coin name (e.g., "XRP")
         buy_amount: amount in USDT to buy
-        check_interval: price check interval in seconds
+        check_interval: price check interval in seconds (default: 5)
     """
     symbol = f"{coin}USDT"
     category = "spot"
@@ -31,9 +72,9 @@ def run_trailing_stop_strategy(
     quick_rise_threshold = 3  # quick price rise threshold for buying
     quick_period = 1  # period for tracking quick rise
     # selling
-    price_rise_threshold = 1  # price rise threshold for selling
+    trailing_update_threshold = 3  # threshold to update trailing stop (%)
+    trailing_drop_threshold = -1  # price drop threshold for trailing stop (%)
     monitoring_period = 1  # period for tracking price change after entry
-    stop_loss_threshold = -10  # stop-loss (percentage from entry point)
     entry_price = None  # position entry price
     trailing_price = None  # trailing stop price
     position_size = None  # amount of coins bought
@@ -142,34 +183,7 @@ def run_trailing_stop_strategy(
                     f"Change over {monitoring_period}h: {monitoring_price_change:.2f}%)"
                 )
 
-                if total_change_from_entry <= stop_loss_threshold:
-                    # If price falls below stop-loss, close position
-                    logging.info(
-                        f"\nStop-loss triggered! Price dropped by {abs(total_change_from_entry):.2f}% from entry point. Placing sell order."
-                    )
-                    r = helper.place_order(
-                        category=category,
-                        symbol=symbol,
-                        side="Sell",
-                        order_type="Market",
-                        qty=position_size,
-                    )
-
-                    if r.get("retCode") != 0:
-                        error_msg = f"\nError placing sell order: {r.get('retMsg')}"
-                        logging.error(error_msg)
-                        raise Exception(f"Order placement error: {r.get('retMsg')}")
-
-                    order_id = r.get("result", {}).get("orderId")
-                    logging.info(f"Sell order placed successfully. ID: {order_id}")
-
-                    logging.info(f"Closed position at price: {current_price:.4f} USDT")
-                    logging.info(f"Loss: {total_change_from_entry:.2f}%")
-                    entry_price = None
-                    trailing_price = None
-                    position_size = None
-
-                elif price_change_from_trailing >= price_rise_threshold:
+                if price_change_from_trailing >= trailing_update_threshold:
                     # If price rises above threshold, update trailing
                     old_trailing = trailing_price
                     trailing_price = current_price
@@ -181,7 +195,7 @@ def run_trailing_stop_strategy(
                     )
                     logging.info(f"Total profit from entry: {total_change_from_entry:.2f}%")
 
-                elif price_change_from_trailing <= price_drop_threshold:
+                elif price_change_from_trailing <= trailing_drop_threshold:
                     # If price drops below threshold from maximum, sell
                     logging.info(
                         f"\nPrice dropped by {abs(price_change_from_trailing):.2f}% from trailing point. Placing sell order."
