@@ -166,10 +166,10 @@ def run_trailing_stop_strategy(
                 # If in position, check trailing or exit conditions
                 price_change_from_trailing = (
                     (current_price - trailing_price) / trailing_price
-                ) * 100
+                ) * 100 if trailing_price is not None else 0.0
                 total_change_from_entry = (
                     (current_price - entry_price) / entry_price
-                ) * 100
+                ) * 100 if entry_price is not None else 0.0
 
                 # Get price change for monitoring period
                 monitoring_price_change = helper.get_price_change(
@@ -205,7 +205,7 @@ def run_trailing_stop_strategy(
                         symbol=symbol,
                         side="Sell",
                         order_type="Market",
-                        qty=position_size,
+                        qty=position_size if position_size is not None else 0.0,
                     )
 
                     if r.get("retCode") != 0:

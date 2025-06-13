@@ -17,7 +17,7 @@ class BybitHelper:
     Helper class for working with Bybit API
     """
 
-    def __init__(self, client: HTTP = None):
+    def __init__(self, client: HTTP | None = None):
         """
         Initialize helper
 
@@ -53,7 +53,22 @@ class BybitHelper:
         if not self.client:
             raise ValueError("HTTP client not initialized")
 
-        r, _, h = self.client.get_wallet_balance(accountType="UNIFIED")
+        response = self.client.get_wallet_balance(accountType="UNIFIED")
+        
+        # Handle different response formats from the API
+        if isinstance(response, tuple):
+            if len(response) == 3:
+                r, _, h = response
+            elif len(response) == 2:
+                r, _ = response
+                h = None
+            else:
+                r = response[0]
+                h = None
+        else:
+            r = response
+            h = None
+
         r = r.get("result", {}).get("list", [])[0]
 
         total_balance = float(r.get("totalWalletBalance", "0.0"))
@@ -81,7 +96,21 @@ class BybitHelper:
         if not self.client:
             raise ValueError("HTTP client not initialized")
 
-        r, _, h = self.client.get_transaction_log()
+        response = self.client.get_transaction_log()
+        
+        # Handle different response formats from the API
+        if isinstance(response, tuple):
+            if len(response) == 3:
+                r, _, h = response
+            elif len(response) == 2:
+                r, _ = response
+                h = None
+            else:
+                r = response[0]
+                h = None
+        else:
+            r = response
+            h = None
 
         df = DataFrame(
             [
@@ -123,8 +152,23 @@ class BybitHelper:
             raise ValueError("Coin name not specified")
 
         try:
-            # API returns a tuple (response, cursor, headers)
-            response, _, headers = self.client.get_wallet_balance(accountType="UNIFIED")
+            # API может возвращать разные форматы ответа
+            api_result = self.client.get_wallet_balance(accountType="UNIFIED")
+            
+            # Обработка различных форматов ответа API
+            if isinstance(api_result, tuple):
+                if len(api_result) == 3:
+                    response, _, headers = api_result
+                elif len(api_result) == 2:
+                    response, _ = api_result
+                    headers = None
+                else:
+                    response = api_result[0]
+                    headers = None
+            else:
+                response = api_result
+                headers = None
+                
             if not response:
                 raise RuntimeError("Empty response from API")
 
@@ -194,9 +238,20 @@ class BybitHelper:
 
         try:
             # Get minimum order quantity
-            instrument_info, _, _ = self.client.get_instruments_info(
+            api_result = self.client.get_instruments_info(
                 category=category, symbol=symbol
             )
+            
+            # Handle different response formats from the API
+            if isinstance(api_result, tuple):
+                if len(api_result) == 3:
+                    instrument_info, _, _ = api_result
+                elif len(api_result) == 2:
+                    instrument_info, _ = api_result
+                else:
+                    instrument_info = api_result[0]
+            else:
+                instrument_info = api_result
             lot_size_filter = (
                 instrument_info.get("result", {})
                 .get("list", [])[0]
@@ -210,7 +265,7 @@ class BybitHelper:
                     f"Quantity {qty} is less than minimum allowed {min_order_qty}"
                 )
 
-            response, _, headers = self.client.place_order(
+            api_result = self.client.place_order(
                 category=category,
                 symbol=symbol,
                 side=side,
@@ -218,6 +273,20 @@ class BybitHelper:
                 qty=qty,
                 marketUnit=market_unit,
             )
+            
+            # Handle different response formats from the API
+            if isinstance(api_result, tuple):
+                if len(api_result) == 3:
+                    response, _, headers = api_result
+                elif len(api_result) == 2:
+                    response, _ = api_result
+                    headers = None
+                else:
+                    response = api_result[0]
+                    headers = None
+            else:
+                response = api_result
+                headers = None
 
             # self.log_limits(headers)
             return response
@@ -244,10 +313,24 @@ class BybitHelper:
             raise ValueError("HTTP client not initialized")
 
         try:
-            response, _, headers = self.client.get_instruments_info(
+            api_result = self.client.get_instruments_info(
                 category=category,
                 symbol=symbol
             )
+            
+            # Handle different response formats from the API
+            if isinstance(api_result, tuple):
+                if len(api_result) == 3:
+                    response, _, headers = api_result
+                elif len(api_result) == 2:
+                    response, _ = api_result
+                    headers = None
+                else:
+                    response = api_result[0]
+                    headers = None
+            else:
+                response = api_result
+                headers = None
             # self.log_limits(headers)
             return response
         except Exception as e:
@@ -267,7 +350,21 @@ class BybitHelper:
         if not self.client:
             raise ValueError("HTTP client not initialized")
 
-        r, _, h = self.client.get_tickers(category=category, symbol=symbol)
+        api_result = self.client.get_tickers(category=category, symbol=symbol)
+        
+        # Handle different response formats from the API
+        if isinstance(api_result, tuple):
+            if len(api_result) == 3:
+                r, _, h = api_result
+            elif len(api_result) == 2:
+                r, _ = api_result
+                h = None
+            else:
+                r = api_result[0]
+                h = None
+        else:
+            r = api_result
+            h = None
         # self.log_limits(h)
 
         return float(r.get("result", {}).get("list", [{}])[0].get("lastPrice", "0"))
@@ -293,12 +390,26 @@ class BybitHelper:
         # Get klines data
         interval = "60"  # 1 hour intervals
         limit = hours  # Number of candles to get
-        r, _, h = self.client.get_kline(
+        api_result = self.client.get_kline(
             category=category,
             symbol=symbol,
             interval=interval,
             limit=limit,
         )
+        
+        # Handle different response formats from the API
+        if isinstance(api_result, tuple):
+            if len(api_result) == 3:
+                r, _, h = api_result
+            elif len(api_result) == 2:
+                r, _ = api_result
+                h = None
+            else:
+                r = api_result[0]
+                h = None
+        else:
+            r = api_result
+            h = None
         # self.log_limits(h)
 
         # Get price from hours ago

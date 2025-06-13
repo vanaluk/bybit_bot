@@ -62,7 +62,7 @@ def main():
         print_usage()
 
     # Set up logging
-    logger = setup_logger(coin, buy_amount)
+    setup_logger(coin, buy_amount)
 
     try:
         if not API_KEY or not SECRET_KEY:
