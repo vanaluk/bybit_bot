@@ -207,6 +207,79 @@ class BybitHelper:
         except ValueError as e:
             raise RuntimeError(f"Value conversion error: {str(e)}")
 
+    def get_wallet_balance(self, coin: str) -> float:
+        """
+        Get total wallet balance for a specific coin (including locked funds)
+
+        Args:
+            coin (str): Coin name (e.g. "BTC", "ETH", "USDT")
+
+        Returns:
+            float: Total wallet balance
+
+        Raises:
+            ValueError: If client is not initialized or coin name is empty
+            RuntimeError: If API response has unexpected format
+        """
+        if not self.client:
+            raise ValueError("HTTP client not initialized")
+        if not coin:
+            raise ValueError("Coin name not specified")
+
+        try:
+            # API может возвращать разные форматы ответа
+            api_result = self.client.get_wallet_balance(accountType="UNIFIED")
+            
+            # Обработка различных форматов ответа API
+            if isinstance(api_result, tuple):
+                if len(api_result) == 3:
+                    response, _, headers = api_result
+                elif len(api_result) == 2:
+                    response, _ = api_result
+                    headers = None
+                else:
+                    response = api_result[0]
+                    headers = None
+            else:
+                response = api_result
+                headers = None
+                
+            if not response:
+                raise RuntimeError("Empty response from API")
+
+            # Get list of coins from response
+            account_data = response.get("result", {}).get("list", [])
+            if not account_data:
+                return 0.0
+
+            # Get coin information
+            coins_data = account_data[0].get("coin", [])
+            if not coins_data:
+                return 0.0
+
+            # Create a dictionary with coin balances using walletBalance
+            balances = {}
+            for asset in coins_data:
+                coin_name = asset.get("coin")
+                wallet_balance = asset.get("walletBalance", "0.0")
+                
+                # Check if coin name exists and amount is not empty
+                if coin_name and wallet_balance and wallet_balance.strip():
+                    try:
+                        balances[coin_name] = float(wallet_balance)
+                    except (ValueError, TypeError):
+                        balances[coin_name] = 0.0
+                elif coin_name:
+                    balances[coin_name] = 0.0
+
+            # Return balance for requested coin or 0.0 if coin not found
+            return self.round_down(balances.get(coin, 0.0), 6)
+
+        except (KeyError, IndexError) as e:
+            raise RuntimeError(f"Unexpected API response format: {str(e)}")
+        except ValueError as e:
+            raise RuntimeError(f"Value conversion error: {str(e)}")
+
     def place_order(
         self,
         category: str,
