@@ -9,7 +9,6 @@ and monitoring API limits.
 import pandas as pd
 from pandas import DataFrame
 from pybit.unified_trading import HTTP
-import time
 
 
 class BybitHelper:
@@ -183,11 +182,19 @@ class BybitHelper:
                 return 0.0
 
             # Create a dictionary with coin balances
-            balances = {
-                asset.get("coin"): float(asset.get("availableToWithdraw", "0.0"))
-                for asset in coins_data
-                if asset.get("coin")  # Check if coin name exists
-            }
+            balances = {}
+            for asset in coins_data:
+                coin_name = asset.get("coin")
+                available_amount = asset.get("availableToWithdraw", "0.0")
+                
+                # Check if coin name exists and amount is not empty
+                if coin_name and available_amount and available_amount.strip():
+                    try:
+                        balances[coin_name] = float(available_amount)
+                    except (ValueError, TypeError):
+                        balances[coin_name] = 0.0
+                elif coin_name:
+                    balances[coin_name] = 0.0
 
             # Log API limits
             # self.log_limits(headers)
