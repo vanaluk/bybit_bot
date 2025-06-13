@@ -21,7 +21,7 @@ def test_connection(helper: BybitHelper):
     logging.info("----------------")
 
     logging.info("2. Get available coin balance (XRP)")
-    avbl = helper.get_assets("XRP")
+    avbl = helper.get_wallet_balance("XRP")
     logging.info(str(avbl))
     logging.info("----------------")
 
@@ -105,19 +105,12 @@ def test_place_order(helper: BybitHelper):
     actual_xrp_balance = helper.get_wallet_balance("XRP")
     logging.info(f"Actual XRP wallet balance: {actual_xrp_balance}")
     
-    # Also check available balance for comparison
-    available_balance = helper.get_assets("XRP")
-    logging.info(f"Available XRP balance: {available_balance}")
-    
     if actual_xrp_balance <= 0:
         logging.error("No XRP balance available for selling")
         return
     
-    # Use available balance if it's greater than 0, otherwise use wallet balance
-    sell_quantity = available_balance if available_balance > 0 else actual_xrp_balance
-    
     # Round quantity to proper decimal places for XRP (usually 1-2 decimal places)
-    sell_quantity = helper.round_down(sell_quantity, 1)  # Round to 1 decimal place for XRP
+    sell_quantity = helper.round_down(actual_xrp_balance, 1)  # Round to 1 decimal place for XRP
     logging.info(f"Rounded sell quantity: {sell_quantity} XRP")
     
     if sell_quantity <= 0:

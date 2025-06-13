@@ -200,12 +200,39 @@ def run_trailing_stop_strategy(
                     logging.info(
                         f"\nPrice dropped by {abs(price_change_from_trailing):.2f}% from trailing point. Placing sell order."
                     )
+                    
+                    # Get actual coin balance instead of using calculated position_size
+                    actual_balance = helper.get_wallet_balance(coin)
+                    
+                    # Round quantity to proper decimal places based on coin type
+                    # Different coins have different precision requirements
+                    if coin in ["BTC", "ETH"]:
+                        decimal_places = 6  # High-value coins need more precision
+                    elif coin in ["XRP", "ADA", "DOGE", "TRX"]:
+                        decimal_places = 1  # Low-value coins typically use 1 decimal
+                    else:
+                        decimal_places = 2  # Default for most coins
+                    
+                    sell_quantity = helper.round_down(actual_balance, decimal_places)
+                    
+                    logging.info(f"Actual {coin} balance: {actual_balance}")
+                    logging.info(f"Selling quantity: {sell_quantity} {coin} (rounded to {decimal_places} decimals)")
+                    
+                    if sell_quantity <= 0:
+                        logging.error(f"No {coin} balance available for selling")
+                        # Reset position variables since we can't sell
+                        entry_price = None
+                        trailing_price = None
+                        position_size = None
+                        continue
+                    
                     r = helper.place_order(
                         category=category,
                         symbol=symbol,
                         side="Sell",
                         order_type="Market",
-                        qty=position_size if position_size is not None else 0.0,
+                        qty=sell_quantity,
+                        market_unit="baseCoin",
                     )
 
                     if r.get("retCode") != 0:
