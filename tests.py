@@ -9,43 +9,46 @@ import logging
 from helpers import BybitHelper
 
 
-def test_connection(helper: BybitHelper):
+def test_connection(helper: BybitHelper, coin="XRP"):
     """
     Test connection and display balance and price information
 
     Args:
         helper: BybitHelper instance
+        coin: coin name (e.g., "XRP", "ETH3L") - defaults to "XRP" if not provided
     """
     logging.info("1. Get all balance")
     helper.assets()
     logging.info("----------------")
 
-    logging.info("2. Get available coin balance (XRP)")
-    avbl = helper.get_wallet_balance("XRP")
+    logging.info(f"2. Get available coin balance ({coin})")
+    avbl = helper.get_wallet_balance(coin)
     logging.info(str(avbl))
     logging.info("----------------")
 
-    logging.info("3. Get price (XRPUSDT)")
-    r = helper.get_instrument_info(category="spot", symbol="XRPUSDT")
+    symbol = f"{coin}USDT"
+    logging.info(f"3. Get price ({symbol})")
+    r = helper.get_instrument_info(category="spot", symbol=symbol)
     logging.info(str(r))
     logging.info("----------------")
 
 
-def test_place_order(helper: BybitHelper):
+def test_place_order(helper: BybitHelper, coin="XRP"):
     """
-    Test order placement - buy XRP for USDT then sell all XRP
+    Test order placement - buy coin for USDT then sell all coin
     
     Args:
         helper: BybitHelper instance
+        coin: coin name (e.g., "XRP", "ETH3L") - defaults to "XRP" if not provided
     """
     import time
     
-    buy_amount_usdt = 20  # Buy XRP for 20 USDT (above minimum order value)
-    symbol = "XRPUSDT"
+    buy_amount_usdt = 20  # Buy coin for 20 USDT (above minimum order value)
+    symbol = f"{coin}USDT"
     category = "spot"
     
-    # Step 1: Place buy order (buy XRP for USDT amount)
-    logging.info(f"4. Place BUY order - {buy_amount_usdt} USDT worth of XRP ({symbol})")
+    # Step 1: Place buy order (buy coin for USDT amount)
+    logging.info(f"4. Place BUY order - {buy_amount_usdt} USDT worth of {coin} ({symbol})")
     buy_response = helper.place_order(
         category=category,
         symbol=symbol,
@@ -100,25 +103,32 @@ def test_place_order(helper: BybitHelper):
     
     logging.info("----------------")
     
-    # Step 3: Get actual XRP balance after purchase
-    logging.info("Getting actual XRP balance after purchase...")
-    actual_xrp_balance = helper.get_wallet_balance("XRP")
-    logging.info(f"Actual XRP wallet balance: {actual_xrp_balance}")
+    # Step 3: Get actual coin balance after purchase
+    logging.info(f"Getting actual {coin} balance after purchase...")
+    actual_coin_balance = helper.get_wallet_balance(coin)
+    logging.info(f"Actual {coin} wallet balance: {actual_coin_balance}")
     
-    if actual_xrp_balance <= 0:
-        logging.error("No XRP balance available for selling")
+    if actual_coin_balance <= 0:
+        logging.error(f"No {coin} balance available for selling")
         return
     
-    # Round quantity to proper decimal places for XRP (usually 1-2 decimal places)
-    sell_quantity = helper.round_down(actual_xrp_balance, 1)  # Round to 1 decimal place for XRP
-    logging.info(f"Rounded sell quantity: {sell_quantity} XRP")
+    # Round quantity to proper decimal places based on coin type
+    if coin in ["BTC", "ETH"]:
+        decimal_places = 6  # High-value coins need more precision
+    elif coin in ["XRP", "ADA", "DOGE", "TRX"]:
+        decimal_places = 1  # Low-value coins typically use 1 decimal
+    else:
+        decimal_places = 2  # Default for most coins
+        
+    sell_quantity = helper.round_down(actual_coin_balance, decimal_places)
+    logging.info(f"Rounded sell quantity: {sell_quantity} {coin}")
     
     if sell_quantity <= 0:
         logging.error("Rounded sell quantity is 0 or negative")
         return
     
     # Step 4: Place sell order with actual balance
-    logging.info(f"5. Place SELL order - {sell_quantity} XRP ({symbol})")
+    logging.info(f"5. Place SELL order - {sell_quantity} {coin} ({symbol})")
     sell_response = helper.place_order(
         category=category,
         symbol=symbol,

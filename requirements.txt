@@ -1,2 +1,9 @@
+# Core dependencies for Bybit trading bot
 python-dotenv==1.0.0
 pybit==5.5.0
+pandas>=2.0.0
+
+# Additional dependencies that may be needed
+# (uncomment if you encounter import errors)
+# numpy>=1.24.0
+# requests>=2.28.0

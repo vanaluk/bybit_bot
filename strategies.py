@@ -111,6 +111,11 @@ def run_trailing_stop_strategy(
                     logging.info(
                         f"\nQuick rise! Price increased by {quick_price_change:.2f}% in the last hour. Placing buy order."
                     )
+                    
+                    # Get wallet balance before buying
+                    balance_before = helper.get_wallet_balance(coin)
+                    logging.info(f"Balance before buying: {balance_before:.8f} {coin}")
+                    
                     r = helper.place_order(
                         category=category,
                         symbol=symbol,
@@ -127,17 +132,30 @@ def run_trailing_stop_strategy(
 
                     order_id = r.get("result", {}).get("orderId")
                     logging.info(f"Buy order placed successfully. ID: {order_id}")
+                    
+                    # Get wallet balance after buying
+                    balance_after = helper.get_wallet_balance(coin)
+                    logging.info(f"Balance after buying: {balance_after:.8f} {coin}")
+                    
+                    # Calculate exact amount bought
+                    bought_amount = balance_after - balance_before
+                    logging.info(f"Exact amount bought: {bought_amount:.8f} {coin}")
 
                     entry_price = current_price
                     trailing_price = current_price
-                    position_size = buy_amount / current_price
+                    position_size = bought_amount  # Use actual bought amount instead of calculation
                     logging.info(f"Entered position at price: {entry_price:.4f} USDT")
-                    logging.info(f"Position size: {position_size:.4f} {coin}")
+                    logging.info(f"Position size: {position_size:.8f} {coin}")
 
                 elif price_change <= price_drop_threshold:
                     logging.info(
                         f"\nPrice dropped by {abs(price_change):.2f}% over {hours_period} hours. Placing buy order."
                     )
+                    
+                    # Get wallet balance before buying
+                    balance_before = helper.get_wallet_balance(coin)
+                    logging.info(f"Balance before buying: {balance_before:.8f} {coin}")
+                    
                     r = helper.place_order(
                         category=category,
                         symbol=symbol,
@@ -154,12 +172,20 @@ def run_trailing_stop_strategy(
 
                     order_id = r.get("result", {}).get("orderId")
                     logging.info(f"Buy order placed successfully. ID: {order_id}")
+                    
+                    # Get wallet balance after buying
+                    balance_after = helper.get_wallet_balance(coin)
+                    logging.info(f"Balance after buying: {balance_after:.8f} {coin}")
+                    
+                    # Calculate exact amount bought
+                    bought_amount = balance_after - balance_before
+                    logging.info(f"Exact amount bought: {bought_amount:.8f} {coin}")
 
                     entry_price = current_price
                     trailing_price = current_price
-                    position_size = buy_amount / current_price
+                    position_size = bought_amount  # Use actual bought amount instead of calculation
                     logging.info(f"Entered position at price: {entry_price:.4f} USDT")
-                    logging.info(f"Position size: {position_size:.4f} {coin}")
+                    logging.info(f"Position size: {position_size:.8f} {coin}")
                 else:
                     logging.info(" (Waiting for signal)")
             else:
@@ -201,8 +227,15 @@ def run_trailing_stop_strategy(
                         f"\nPrice dropped by {abs(price_change_from_trailing):.2f}% from trailing point. Placing sell order."
                     )
                     
-                    # Get actual coin balance instead of using calculated position_size
-                    actual_balance = helper.get_wallet_balance(coin)
+                    # Use the exact position_size that was calculated after buying
+                    # instead of checking current balance which might include other coins
+                    if position_size <= 0:
+                        logging.error(f"No {coin} position available for selling")
+                        # Reset position variables since we can't sell
+                        entry_price = None
+                        trailing_price = None
+                        position_size = None
+                        continue
                     
                     # Round quantity to proper decimal places based on coin type
                     # Different coins have different precision requirements
@@ -213,18 +246,10 @@ def run_trailing_stop_strategy(
                     else:
                         decimal_places = 2  # Default for most coins
                     
-                    sell_quantity = helper.round_down(actual_balance, decimal_places)
+                    sell_quantity = helper.round_down(position_size, decimal_places)
                     
-                    logging.info(f"Actual {coin} balance: {actual_balance}")
+                    logging.info(f"Position size to sell: {position_size:.8f} {coin}")
                     logging.info(f"Selling quantity: {sell_quantity} {coin} (rounded to {decimal_places} decimals)")
-                    
-                    if sell_quantity <= 0:
-                        logging.error(f"No {coin} balance available for selling")
-                        # Reset position variables since we can't sell
-                        entry_price = None
-                        trailing_price = None
-                        position_size = None
-                        continue
                     
                     r = helper.place_order(
                         category=category,

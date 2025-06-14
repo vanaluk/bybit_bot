@@ -78,7 +78,7 @@ def main():
         helper = BybitHelper(client)
 
         # Test connection and display information
-        test_connection(helper)
+        test_connection(helper, coin)
 
         # Start trading algorithm
         run_trailing_stop_strategy(helper, coin, buy_amount)
