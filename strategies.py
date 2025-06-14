@@ -5,10 +5,66 @@ This module contains various trading strategies
 that can be used with the Bybit API.
 """
 
-import time
 import logging
+import random
+import time
 from datetime import datetime
+
 from helpers import BybitHelper
+
+
+def retry_on_error(max_retries=3, delay=5):
+    """
+    Decorator for retrying operations on error
+
+    Args:
+        max_retries: maximum number of retry attempts
+        delay: delay between retries in seconds
+    """
+
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            retries = 0
+            while retries < max_retries:
+                try:
+                    return func(*args, **kwargs)
+                except Exception as e:
+                    retries += 1
+                    if retries == max_retries:
+                        logging.error(
+                            f"Maximum retry attempts reached ({max_retries}). Last error: {str(e)}"
+                        )
+                        raise
+                    wait_time = delay + random.uniform(0, 2)  # Add random jitter
+                    logging.warning(
+                        f"Error executing {func.__name__}: {str(e)}. Retry {retries}/{max_retries} in {wait_time:.1f} sec..."
+                    )
+                    time.sleep(wait_time)
+            return None
+
+        return wrapper
+
+    return decorator
+
+
+@retry_on_error(max_retries=3, delay=5)
+def safe_get_price(helper: BybitHelper, category: str, symbol: str) -> float:
+    """Safe price retrieval with retry mechanism"""
+    return helper.get_price(category, symbol)
+
+
+@retry_on_error(max_retries=3, delay=5)
+def safe_get_price_change(
+    helper: BybitHelper, category: str, symbol: str, hours: int
+) -> float:
+    """Safe price change retrieval with retry mechanism"""
+    return helper.get_price_change(category, symbol, hours)
+
+
+@retry_on_error(max_retries=3, delay=5)
+def safe_place_order(helper: BybitHelper, **kwargs):
+    """Safe order placement with retry mechanism"""
+    return helper.place_order(**kwargs)
 
 
 def run_trailing_stop_strategy(
@@ -86,14 +142,22 @@ def run_trailing_stop_strategy(
         f"2) Quick rise of {quick_rise_threshold}% over {quick_period} hour"
     )
 
+    consecutive_errors = 0
+    max_consecutive_errors = 5
+
     while True:
         try:
             # Get current price and changes over different periods
-            current_price = helper.get_price(category, symbol)
-            price_change = helper.get_price_change(category, symbol, hours=hours_period)
-            quick_price_change = helper.get_price_change(
-                category, symbol, hours=quick_period
+            current_price = safe_get_price(helper, category, symbol)
+            price_change = safe_get_price_change(
+                helper, category, symbol, hours=hours_period
             )
+            quick_price_change = safe_get_price_change(
+                helper, category, symbol, hours=quick_period
+            )
+
+            # Reset error counter on successful execution
+            consecutive_errors = 0
 
             # Format time for output
             current_time = datetime.now().strftime("%H:%M:%S")
@@ -111,12 +175,13 @@ def run_trailing_stop_strategy(
                     logging.info(
                         f"\nQuick rise! Price increased by {quick_price_change:.2f}% in the last hour. Placing buy order."
                     )
-                    
+
                     # Get wallet balance before buying
                     balance_before = helper.get_wallet_balance(coin)
                     logging.info(f"Balance before buying: {balance_before:.8f} {coin}")
-                    
-                    r = helper.place_order(
+
+                    r = safe_place_order(
+                        helper,
                         category=category,
                         symbol=symbol,
                         side="Buy",
@@ -132,18 +197,20 @@ def run_trailing_stop_strategy(
 
                     order_id = r.get("result", {}).get("orderId")
                     logging.info(f"Buy order placed successfully. ID: {order_id}")
-                    
+
                     # Get wallet balance after buying
                     balance_after = helper.get_wallet_balance(coin)
                     logging.info(f"Balance after buying: {balance_after:.8f} {coin}")
-                    
+
                     # Calculate exact amount bought
                     bought_amount = balance_after - balance_before
                     logging.info(f"Exact amount bought: {bought_amount:.8f} {coin}")
 
                     entry_price = current_price
                     trailing_price = current_price
-                    position_size = bought_amount  # Use actual bought amount instead of calculation
+                    position_size = (
+                        bought_amount  # Use actual bought amount instead of calculation
+                    )
                     logging.info(f"Entered position at price: {entry_price:.4f} USDT")
                     logging.info(f"Position size: {position_size:.8f} {coin}")
 
@@ -151,12 +218,13 @@ def run_trailing_stop_strategy(
                     logging.info(
                         f"\nPrice dropped by {abs(price_change):.2f}% over {hours_period} hours. Placing buy order."
                     )
-                    
+
                     # Get wallet balance before buying
                     balance_before = helper.get_wallet_balance(coin)
                     logging.info(f"Balance before buying: {balance_before:.8f} {coin}")
-                    
-                    r = helper.place_order(
+
+                    r = safe_place_order(
+                        helper,
                         category=category,
                         symbol=symbol,
                         side="Buy",
@@ -172,18 +240,20 @@ def run_trailing_stop_strategy(
 
                     order_id = r.get("result", {}).get("orderId")
                     logging.info(f"Buy order placed successfully. ID: {order_id}")
-                    
+
                     # Get wallet balance after buying
                     balance_after = helper.get_wallet_balance(coin)
                     logging.info(f"Balance after buying: {balance_after:.8f} {coin}")
-                    
+
                     # Calculate exact amount bought
                     bought_amount = balance_after - balance_before
                     logging.info(f"Exact amount bought: {bought_amount:.8f} {coin}")
 
                     entry_price = current_price
                     trailing_price = current_price
-                    position_size = bought_amount  # Use actual bought amount instead of calculation
+                    position_size = (
+                        bought_amount  # Use actual bought amount instead of calculation
+                    )
                     logging.info(f"Entered position at price: {entry_price:.4f} USDT")
                     logging.info(f"Position size: {position_size:.8f} {coin}")
                 else:
@@ -191,15 +261,19 @@ def run_trailing_stop_strategy(
             else:
                 # If in position, check trailing or exit conditions
                 price_change_from_trailing = (
-                    (current_price - trailing_price) / trailing_price
-                ) * 100 if trailing_price is not None else 0.0
+                    ((current_price - trailing_price) / trailing_price) * 100
+                    if trailing_price is not None
+                    else 0.0
+                )
                 total_change_from_entry = (
-                    (current_price - entry_price) / entry_price
-                ) * 100 if entry_price is not None else 0.0
+                    ((current_price - entry_price) / entry_price) * 100
+                    if entry_price is not None
+                    else 0.0
+                )
 
                 # Get price change for monitoring period
-                monitoring_price_change = helper.get_price_change(
-                    category, symbol, hours=monitoring_period
+                monitoring_price_change = safe_get_price_change(
+                    helper, category, symbol, hours=monitoring_period
                 )
 
                 logging.info(
@@ -219,14 +293,16 @@ def run_trailing_stop_strategy(
                     logging.info(
                         f"Updating trailing point: {old_trailing:.4f} -> {trailing_price:.4f} USDT"
                     )
-                    logging.info(f"Total profit from entry: {total_change_from_entry:.2f}%")
+                    logging.info(
+                        f"Total profit from entry: {total_change_from_entry:.2f}%"
+                    )
 
                 elif price_change_from_trailing <= trailing_drop_threshold:
                     # If price drops below threshold from maximum, sell
                     logging.info(
                         f"\nPrice dropped by {abs(price_change_from_trailing):.2f}% from trailing point. Placing sell order."
                     )
-                    
+
                     # Use the exact position_size that was calculated after buying
                     # instead of checking current balance which might include other coins
                     if position_size is None or position_size <= 0:
@@ -236,7 +312,7 @@ def run_trailing_stop_strategy(
                         trailing_price = None
                         position_size = None
                         continue
-                    
+
                     # Round quantity to proper decimal places based on coin type
                     # Different coins have different precision requirements
                     if coin in ["BTC", "ETH"]:
@@ -245,13 +321,16 @@ def run_trailing_stop_strategy(
                         decimal_places = 1  # Low-value coins typically use 1 decimal
                     else:
                         decimal_places = 2  # Default for most coins
-                    
+
                     sell_quantity = helper.round_down(position_size, decimal_places)
-                    
+
                     logging.info(f"Position size to sell: {position_size:.8f} {coin}")
-                    logging.info(f"Selling quantity: {sell_quantity} {coin} (rounded to {decimal_places} decimals)")
-                    
-                    r = helper.place_order(
+                    logging.info(
+                        f"Selling quantity: {sell_quantity} {coin} (rounded to {decimal_places} decimals)"
+                    )
+
+                    r = safe_place_order(
+                        helper,
                         category=category,
                         symbol=symbol,
                         side="Sell",
@@ -279,6 +358,23 @@ def run_trailing_stop_strategy(
             time.sleep(check_interval)
 
         except Exception as e:
-            logging.error(f"\nCritical error: {str(e)}")
-            logging.error("Stopping program...")
-            break
+            consecutive_errors += 1
+            logging.error(f"\nError executing strategy: {str(e)}")
+
+            if consecutive_errors >= max_consecutive_errors:
+                logging.error(
+                    f"Maximum consecutive errors reached ({max_consecutive_errors}). Restarting strategy..."
+                )
+                # Reset all position variables
+                entry_price = None
+                trailing_price = None
+                position_size = None
+                consecutive_errors = 0
+                time.sleep(30)  # Wait 30 seconds before restart
+                continue
+
+            logging.warning(
+                f"Continuing after error. Attempt {consecutive_errors}/{max_consecutive_errors}"
+            )
+            time.sleep(check_interval * 2)  # Increase wait interval on error
+            continue
