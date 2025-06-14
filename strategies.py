@@ -229,7 +229,7 @@ def run_trailing_stop_strategy(
                     
                     # Use the exact position_size that was calculated after buying
                     # instead of checking current balance which might include other coins
-                    if position_size <= 0:
+                    if position_size is None or position_size <= 0:
                         logging.error(f"No {coin} position available for selling")
                         # Reset position variables since we can't sell
                         entry_price = None
