@@ -13,6 +13,90 @@ from datetime import datetime
 from helpers import BybitHelper
 
 
+def format_price(price: float | None) -> str:
+    """
+    Format price to show appropriate number of decimal places
+    
+    Args:
+        price: price value to format
+        
+    Returns:
+        formatted price string
+    """
+    if price is None or price == 0:
+        return "0.0000"
+    
+    # For very small prices, show up to 12 decimal places
+    if price < 0.0001:
+        formatted = f"{price:.12f}".rstrip('0').rstrip('.')
+        # Ensure at least 4 decimal places for consistency
+        if '.' in formatted and len(formatted.split('.')[1]) < 4:
+            return f"{price:.4f}"
+        return formatted
+    else:
+        return f"{price:.4f}"
+
+
+def check_minimum_order_size(helper: BybitHelper, symbol: str, buy_amount: float) -> bool:
+    """
+    Check if the order meets minimum size requirements
+    
+    Args:
+        helper: BybitHelper instance
+        symbol: trading symbol (e.g., "WENUSDT")
+        buy_amount: amount in USDT to buy
+        
+    Returns:
+        True if order size is valid, False otherwise
+    """
+    try:
+        # Get instrument info to check minimum order requirements
+        instruments_info = helper.get_instrument_info(
+            category="spot",
+            symbol=symbol
+        )
+        
+        if instruments_info["retCode"] != 0:
+            logging.error(f"Failed to get instrument info for {symbol}: {instruments_info['retMsg']}")
+            return False
+            
+        if not instruments_info["result"]["list"]:
+            logging.error(f"No instrument info found for {symbol}")
+            return False
+            
+        instrument = instruments_info["result"]["list"][0]
+        min_order_amt = float(instrument.get("lotSizeFilter", {}).get("minOrderAmt", "0"))
+        min_order_qty = float(instrument.get("lotSizeFilter", {}).get("minOrderQty", "0"))
+        
+        # Get current price to calculate minimum USDT required
+        current_price = helper.get_price("spot", symbol)
+        min_usdt_required = min_order_qty * current_price
+        
+        logging.info(f"Order validation for {symbol}:")
+        logging.info(f"  Current price: {format_price(current_price)} USDT")
+        logging.info(f"  Your order amount: {buy_amount} USDT")
+        logging.info(f"  Minimum order amount: {min_order_amt} USDT")
+        logging.info(f"  Minimum order quantity: {min_order_qty} coins")
+        logging.info(f"  Minimum USDT required for min quantity: {min_usdt_required:.2f} USDT")
+        
+        # Check minimum order amount (for quoteCoin orders)
+        if min_order_amt > 0 and buy_amount < min_order_amt:
+            logging.error(f"❌ Order amount {buy_amount} USDT is less than minimum required {min_order_amt} USDT")
+            return False
+            
+        # Check minimum USDT required for minimum quantity
+        if min_usdt_required > buy_amount:
+            logging.error(f"❌ Order amount {buy_amount} USDT is less than minimum required {min_usdt_required:.2f} USDT for minimum quantity")
+            return False
+            
+        logging.info("✅ Order size validation passed")
+        return True
+        
+    except Exception as e:
+        logging.error(f"Error checking minimum order size for {symbol}: {str(e)}")
+        return False
+
+
 def retry_on_error(max_retries=3, delay=5):
     """
     Decorator for retrying operations on error
@@ -179,20 +263,28 @@ def run_trailing_stop_strategy(
             if entry_price is None:
                 # If not in position, look for entry opportunity
                 logging.info(
-                    f"[{current_time}] {symbol} Price: {current_price:.4f} USDT "
-                    f"(Change over {hours_period}h: {price_change:.2f}%, "
-                    f"over {quick_period}h: {quick_price_change:.2f}%)"
+                    f"[{current_time}] {symbol} Price: {format_price(current_price)} USDT "
+                    f"(Change over {hours_period}h: {format_price(price_change)}%, "
+                    f"over {quick_period}h: {format_price(quick_price_change)}%)"
                 )
 
                 # Check entry conditions
                 if quick_price_change >= quick_rise_threshold:
                     logging.info(
-                        f"\nQuick rise! Price increased by {quick_price_change:.2f}% in the last hour. Placing buy order."
+                        f"\nQuick rise! Price increased by {format_price(quick_price_change)}% in the last hour. Checking order requirements..."
                     )
+
+                    # Check minimum order size before placing order
+                    if not check_minimum_order_size(helper, symbol, buy_amount):
+                        logging.error(f"Cannot place order for {symbol} - minimum order requirements not met")
+                        time.sleep(check_interval)
+                        continue
+
+                    logging.info("Placing buy order...")
 
                     # Get wallet balance before buying
                     balance_before = helper.get_wallet_balance(coin)
-                    logging.info(f"Balance before buying: {balance_before:.8f} {coin}")
+                    logging.info(f"Balance before buying: {format_price(balance_before)} {coin}")
 
                     r = safe_place_order(
                         helper,
@@ -214,11 +306,11 @@ def run_trailing_stop_strategy(
 
                     # Get wallet balance after buying
                     balance_after = helper.get_wallet_balance(coin)
-                    logging.info(f"Balance after buying: {balance_after:.8f} {coin}")
+                    logging.info(f"Balance after buying: {format_price(balance_after)} {coin}")
 
                     # Calculate exact amount bought
                     bought_amount = balance_after - balance_before
-                    logging.info(f"Exact amount bought: {bought_amount:.8f} {coin}")
+                    logging.info(f"Exact amount bought: {format_price(bought_amount)} {coin}")
 
                     entry_price = current_price
                     trailing_price = current_price
@@ -226,17 +318,25 @@ def run_trailing_stop_strategy(
                         bought_amount  # Use actual bought amount instead of calculation
                     )
                     trailing_activated = False  # Reset trailing activation
-                    logging.info(f"Entered position at price: {entry_price:.4f} USDT")
-                    logging.info(f"Position size: {position_size:.8f} {coin}")
+                    logging.info(f"Entered position at price: {format_price(entry_price)} USDT")
+                    logging.info(f"Position size: {format_price(position_size)} {coin}")
 
                 elif price_change <= price_drop_threshold:
                     logging.info(
-                        f"\nPrice dropped by {abs(price_change):.2f}% over {hours_period} hours. Placing buy order."
+                        f"\nPrice dropped by {abs(price_change):.2f}% over {hours_period} hours. Checking order requirements..."
                     )
+
+                    # Check minimum order size before placing order
+                    if not check_minimum_order_size(helper, symbol, buy_amount):
+                        logging.error(f"Cannot place order for {symbol} - minimum order requirements not met")
+                        time.sleep(check_interval)
+                        continue
+
+                    logging.info("Placing buy order...")
 
                     # Get wallet balance before buying
                     balance_before = helper.get_wallet_balance(coin)
-                    logging.info(f"Balance before buying: {balance_before:.8f} {coin}")
+                    logging.info(f"Balance before buying: {format_price(balance_before)} {coin}")
 
                     r = safe_place_order(
                         helper,
@@ -258,11 +358,11 @@ def run_trailing_stop_strategy(
 
                     # Get wallet balance after buying
                     balance_after = helper.get_wallet_balance(coin)
-                    logging.info(f"Balance after buying: {balance_after:.8f} {coin}")
+                    logging.info(f"Balance after buying: {format_price(balance_after)} {coin}")
 
                     # Calculate exact amount bought
                     bought_amount = balance_after - balance_before
-                    logging.info(f"Exact amount bought: {bought_amount:.8f} {coin}")
+                    logging.info(f"Exact amount bought: {format_price(bought_amount)} {coin}")
 
                     entry_price = current_price
                     trailing_price = current_price
@@ -270,8 +370,8 @@ def run_trailing_stop_strategy(
                         bought_amount  # Use actual bought amount instead of calculation
                     )
                     trailing_activated = False  # Reset trailing activation
-                    logging.info(f"Entered position at price: {entry_price:.4f} USDT")
-                    logging.info(f"Position size: {position_size:.8f} {coin}")
+                    logging.info(f"Entered position at price: {format_price(entry_price)} USDT")
+                    logging.info(f"Position size: {format_price(position_size)} {coin}")
                 else:
                     logging.info(" (Waiting for signal)")
             else:
@@ -297,7 +397,7 @@ def run_trailing_stop_strategy(
                     if total_change_from_entry >= minimum_profit_threshold:
                         trailing_activated = True
                         logging.info(
-                            f"\n🟢 Minimum profit reached! Profit: {total_change_from_entry:.2f}% >= {minimum_profit_threshold}%"
+                            f"\n🟢 Minimum profit reached! Profit: {format_price(total_change_from_entry)}% >= {minimum_profit_threshold}%"
                         )
                         logging.info("Trailing stop mechanism activated!")
                     status_msg = f"(Waiting for {minimum_profit_threshold}% profit)"
@@ -305,17 +405,17 @@ def run_trailing_stop_strategy(
                     status_msg = "(Trailing active)"
 
                 logging.info(
-                    f"[{current_time}] {symbol} Price: {current_price:.4f} USDT "
-                    f"(From entry: {total_change_from_entry:.2f}%, "
-                    f"From trailing: {price_change_from_trailing:.2f}%, "
-                    f"Change over {monitoring_period}h: {monitoring_price_change:.2f}%) {status_msg}"
+                    f"[{current_time}] {symbol} Price: {format_price(current_price)} USDT "
+                    f"(From entry: {format_price(total_change_from_entry)}%, "
+                    f"From trailing: {format_price(price_change_from_trailing)}%, "
+                    f"Change over {monitoring_period}h: {format_price(monitoring_price_change)}%)"
                 )
 
                 # Check if we can activate trailing stop
                 if not trailing_activated and total_change_from_entry >= minimum_profit_threshold:
                     trailing_activated = True
                     logging.info(
-                        f"\n🟢 Minimum profit reached! Profit: {total_change_from_entry:.2f}% >= {minimum_profit_threshold}%"
+                        f"\n🟢 Minimum profit reached! Profit: {format_price(total_change_from_entry)}% >= {minimum_profit_threshold}%"
                     )
                     logging.info("Trailing stop mechanism activated!")
 
@@ -325,13 +425,13 @@ def run_trailing_stop_strategy(
                     old_trailing = trailing_price
                     trailing_price = current_price
                     logging.info(
-                        f"\nPrice increased by {price_change_from_trailing:.2f}% from last trailing point."
+                        f"\nPrice increased by {format_price(price_change_from_trailing)}% from last trailing point."
                     )
                     logging.info(
-                        f"Updating trailing point: {old_trailing:.4f} -> {trailing_price:.4f} USDT"
+                        f"Updating trailing point: {format_price(old_trailing)} -> {format_price(trailing_price)} USDT"
                     )
                     logging.info(
-                        f"Total profit from entry: {total_change_from_entry:.2f}%"
+                        f"Total profit from entry: {format_price(total_change_from_entry)}%"
                     )
 
                 # Check exit conditions only if trailing is activated
@@ -340,7 +440,7 @@ def run_trailing_stop_strategy(
                     logging.info(
                         f"\n🔴 Price dropped by {abs(price_change_from_trailing):.2f}% from trailing point."
                     )
-                    logging.info(f"Final profit: {total_change_from_entry:.2f}% (≥ {minimum_profit_threshold}%)")
+                    logging.info(f"Final profit: {format_price(total_change_from_entry)}% (≥ {minimum_profit_threshold}%)")
                     logging.info("Placing sell order.")
 
                     # Use the exact position_size that was calculated after buying
@@ -363,9 +463,9 @@ def run_trailing_stop_strategy(
 
                     sell_quantity = helper.round_down(position_size, decimal_places)
 
-                    logging.info(f"Position size to sell: {position_size:.8f} {coin}")
+                    logging.info(f"Position size to sell: {format_price(position_size)} {coin}")
                     logging.info(
-                        f"Selling quantity: {sell_quantity} {coin} (rounded to {decimal_places} decimals)"
+                        f"Selling quantity: {format_price(sell_quantity)} {coin} (rounded to {decimal_places} decimals)"
                     )
 
                     r = safe_place_order(
@@ -386,8 +486,8 @@ def run_trailing_stop_strategy(
                     order_id = r.get("result", {}).get("orderId")
                     logging.info(f"Sell order placed successfully. ID: {order_id}")
 
-                    logging.info(f"Closed position at price: {current_price:.4f} USDT")
-                    logging.info(f"Final profit: {total_change_from_entry:.2f}%")
+                    logging.info(f"Closed position at price: {format_price(current_price)} USDT")
+                    logging.info(f"Final profit: {format_price(total_change_from_entry)}%")
                     entry_price = None
                     trailing_price = None
                     position_size = None
@@ -517,8 +617,8 @@ def run_trailing_stop_strategy_whitelist(
                         quick_price_change = safe_get_price_change(helper, category, symbol, hours=quick_period)
 
                         logging.info(
-                            f"  {symbol}: {current_price:.4f} USDT "
-                            f"({hours_period}h: {price_change:.2f}%, {quick_period}h: {quick_price_change:.2f}%)"
+                            f"  {symbol}: {format_price(current_price)} USDT "
+                            f"({hours_period}h: {format_price(price_change)}%, {quick_period}h: {format_price(quick_price_change)}%)"
                         )
 
                         # Check entry conditions and calculate priority score
@@ -527,10 +627,10 @@ def run_trailing_stop_strategy_whitelist(
 
                         if quick_price_change >= quick_rise_threshold:
                             score = abs(quick_price_change)  # Higher rise = higher priority
-                            reason = f"Quick rise {quick_price_change:.2f}%"
+                            reason = f"Quick rise {format_price(quick_price_change)}%"
                         elif price_change <= price_drop_threshold:
                             score = abs(price_change)  # Bigger drop = higher priority
-                            reason = f"Price drop {price_change:.2f}%"
+                            reason = f"Price drop {format_price(price_change)}%"
 
                         if score > best_score:
                             best_score = score
@@ -557,12 +657,20 @@ def run_trailing_stop_strategy_whitelist(
                     logging.info("\n🎯 ENTRY SIGNAL FOUND!")
                     logging.info(f"Selected coin: {symbol}")
                     logging.info(f"Reason: {reason}")
-                    logging.info(f"Price: {current_price:.4f} USDT")
+                    logging.info(f"Price: {format_price(current_price)} USDT")
+                    logging.info("Checking order requirements...")
+
+                    # Check minimum order size before placing order
+                    if not check_minimum_order_size(helper, symbol, buy_amount):
+                        logging.error(f"Cannot place order for {symbol} - minimum order requirements not met")
+                        logging.info("Continuing whitelist scan...")
+                        continue
+
                     logging.info("Placing buy order...")
 
                     # Get wallet balance before buying
                     balance_before = helper.get_wallet_balance(coin)
-                    logging.info(f"Balance before buying: {balance_before:.8f} {coin}")
+                    logging.info(f"Balance before buying: {format_price(balance_before)} {coin}")
 
                     # Place buy order
                     r = safe_place_order(
@@ -585,11 +693,11 @@ def run_trailing_stop_strategy_whitelist(
 
                     # Get wallet balance after buying
                     balance_after = helper.get_wallet_balance(coin)
-                    logging.info(f"Balance after buying: {balance_after:.8f} {coin}")
+                    logging.info(f"Balance after buying: {format_price(balance_after)} {coin}")
 
                     # Calculate exact amount bought
                     bought_amount = balance_after - balance_before
-                    logging.info(f"Exact amount bought: {bought_amount:.8f} {coin}")
+                    logging.info(f"Exact amount bought: {format_price(bought_amount)} {coin}")
 
                     # Set position variables
                     current_coin = coin
@@ -599,8 +707,8 @@ def run_trailing_stop_strategy_whitelist(
                     trailing_activated = False
 
                     logging.info(f"🔄 Switched to single-coin mode: {symbol}")
-                    logging.info(f"Entry price: {entry_price:.4f} USDT")
-                    logging.info(f"Position size: {position_size:.8f} {coin}")
+                    logging.info(f"Entry price: {format_price(entry_price)} USDT")
+                    logging.info(f"Position size: {format_price(position_size)} {coin}")
 
                 else:
                     logging.info("  ⏳ No entry signals found. Continuing scan...")
@@ -628,7 +736,7 @@ def run_trailing_stop_strategy_whitelist(
                     if total_change_from_entry >= minimum_profit_threshold:
                         trailing_activated = True
                         logging.info(
-                            f"\n🟢 Minimum profit reached! Profit: {total_change_from_entry:.2f}% >= {minimum_profit_threshold}%"
+                            f"\n🟢 Minimum profit reached! Profit: {format_price(total_change_from_entry)}% >= {minimum_profit_threshold}%"
                         )
                         logging.info("Trailing stop mechanism activated!")
                     status_msg = f"(Waiting for {minimum_profit_threshold}% profit)"
@@ -636,17 +744,17 @@ def run_trailing_stop_strategy_whitelist(
                     status_msg = "(Trailing active)"
 
                 logging.info(
-                    f"[{current_time}] {symbol} Price: {current_price:.4f} USDT "
-                    f"(From entry: {total_change_from_entry:.2f}%, "
-                    f"From trailing: {price_change_from_trailing:.2f}%, "
-                    f"Change over {monitoring_period}h: {monitoring_price_change:.2f}%) {status_msg}"
+                    f"[{current_time}] {symbol} Price: {format_price(current_price)} USDT "
+                    f"(From entry: {format_price(total_change_from_entry)}%, "
+                    f"From trailing: {format_price(price_change_from_trailing)}%, "
+                    f"Change over {monitoring_period}h: {format_price(monitoring_price_change)}%)"
                 )
 
                 # Check if we can activate trailing stop
                 if not trailing_activated and total_change_from_entry >= minimum_profit_threshold:
                     trailing_activated = True
                     logging.info(
-                        f"\n🟢 Minimum profit reached! Profit: {total_change_from_entry:.2f}% >= {minimum_profit_threshold}%"
+                        f"\n🟢 Minimum profit reached! Profit: {format_price(total_change_from_entry)}% >= {minimum_profit_threshold}%"
                     )
                     logging.info("Trailing stop mechanism activated!")
 
@@ -655,19 +763,19 @@ def run_trailing_stop_strategy_whitelist(
                     old_trailing = trailing_price
                     trailing_price = current_price
                     logging.info(
-                        f"\nPrice increased by {price_change_from_trailing:.2f}% from last trailing point."
+                        f"\nPrice increased by {format_price(price_change_from_trailing)}% from last trailing point."
                     )
                     logging.info(
-                        f"Updating trailing point: {old_trailing:.4f} -> {trailing_price:.4f} USDT"
+                        f"Updating trailing point: {format_price(old_trailing)} -> {format_price(trailing_price)} USDT"
                     )
-                    logging.info(f"Total profit from entry: {total_change_from_entry:.2f}%")
+                    logging.info(f"Total profit from entry: {format_price(total_change_from_entry)}%")
 
                 # Check exit conditions only if trailing is activated
                 elif trailing_activated and price_change_from_trailing <= trailing_drop_threshold:
                     logging.info(
                         f"\n🔴 Price dropped by {abs(price_change_from_trailing):.2f}% from trailing point."
                     )
-                    logging.info(f"Final profit: {total_change_from_entry:.2f}% (≥ {minimum_profit_threshold}%)")
+                    logging.info(f"Final profit: {format_price(total_change_from_entry)}% (≥ {minimum_profit_threshold}%)")
                     logging.info("Placing sell order...")
 
                     # Use the exact position_size that was calculated after buying
@@ -691,8 +799,8 @@ def run_trailing_stop_strategy_whitelist(
 
                     sell_quantity = helper.round_down(position_size, decimal_places)
 
-                    logging.info(f"Position size to sell: {position_size:.8f} {current_coin}")
-                    logging.info(f"Selling quantity: {sell_quantity} {current_coin}")
+                    logging.info(f"Position size to sell: {format_price(position_size)} {current_coin}")
+                    logging.info(f"Selling quantity: {format_price(sell_quantity)} {current_coin}")
 
                     # Place sell order
                     r = safe_place_order(
@@ -713,8 +821,8 @@ def run_trailing_stop_strategy_whitelist(
                     order_id = r.get("result", {}).get("orderId")
                     logging.info(f"✅ Sell order placed successfully. ID: {order_id}")
 
-                    logging.info(f"Closed position at price: {current_price:.4f} USDT")
-                    logging.info(f"Final profit: {total_change_from_entry:.2f}%")
+                    logging.info(f"Closed position at price: {format_price(current_price)} USDT")
+                    logging.info(f"Final profit: {format_price(total_change_from_entry)}%")
 
                     # Reset position variables and return to whitelist scanning
                     current_coin = None
