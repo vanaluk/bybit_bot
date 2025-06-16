@@ -338,12 +338,21 @@ class BybitHelper:
                 .get("lotSizeFilter", {})
             )
             min_order_qty = float(lot_size_filter.get("minOrderQty", "0.0"))
+            min_order_amt = float(lot_size_filter.get("minOrderAmt", "0.0"))
 
-            # Check minimum order quantity
-            if qty < min_order_qty:
-                raise ValueError(
-                    f"Quantity {qty} is less than minimum allowed {min_order_qty}"
-                )
+            # Check minimum order quantity based on market unit
+            if market_unit == "quoteCoin":
+                # When buying for USDT amount, check minimum order amount
+                if min_order_amt > 0 and qty < min_order_amt:
+                    raise ValueError(
+                        f"Order amount {qty} USDT is less than minimum allowed {min_order_amt} USDT"
+                    )
+            else:
+                # When buying specific coin quantity, check minimum order quantity
+                if min_order_qty > 0 and qty < min_order_qty:
+                    raise ValueError(
+                        f"Quantity {qty} is less than minimum allowed {min_order_qty}"
+                    )
 
             api_result = self.client.place_order(
                 category=category,
