@@ -509,6 +509,62 @@ class BybitHelper:
             return 0
         return ((current_price - old_price) / old_price) * 100
 
+    def get_base_precision(self, category: str, symbol: str) -> int:
+        """
+        Get base coin precision (number of decimal places) for a trading pair
+
+        Args:
+            category (str): Market category (e.g. "spot", "linear")
+            symbol (str): Trading pair symbol (e.g. "BTCUSDT")
+
+        Returns:
+            int: Number of decimal places allowed for base coin quantity
+
+        Raises:
+            ValueError: If client is not initialized
+            RuntimeError: If instrument information retrieval fails
+        """
+        if not self.client:
+            raise ValueError("HTTP client not initialized")
+
+        try:
+            api_result = self.client.get_instruments_info(
+                category=category,
+                symbol=symbol
+            )
+            
+            # Handle different response formats from the API
+            if isinstance(api_result, tuple):
+                if len(api_result) == 3:
+                    response, _, _ = api_result
+                elif len(api_result) == 2:
+                    response, _ = api_result
+                else:
+                    response = api_result[0]
+            else:
+                response = api_result
+
+            if response.get("retCode") != 0:
+                raise RuntimeError(f"API error: {response.get('retMsg')}")
+
+            instrument = response.get("result", {}).get("list", [])[0]
+            lot_size_filter = instrument.get("lotSizeFilter", {})
+            
+            # Get basePrecision - this tells us how many decimal places are allowed
+            base_precision = lot_size_filter.get("basePrecision", "0.01")
+            
+            # Convert precision string to number of decimals
+            # e.g., "0.01" -> 2, "0.0001" -> 4, "1" -> 0
+            if "." in base_precision:
+                decimals = len(base_precision.split(".")[1])
+            else:
+                decimals = 0
+                
+            return decimals
+
+        except Exception as e:
+            raise RuntimeError(f"Failed to get base precision: {str(e)}")
+
     def round_down(self, value: float, decimals: int) -> float:
         """
         Remove excess from float
