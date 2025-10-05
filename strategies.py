@@ -654,10 +654,14 @@ def run_trailing_stop_strategy_whitelist(
                         for coin in coin_whitelist
                     }
                     
-                    # Process results as they complete
+                    # Collect all results first to ensure complete scan
+                    all_results = []
                     for future in as_completed(future_to_coin):
                         result = future.result()
-                        
+                        all_results.append(result)
+                    
+                    # Process all results after collection is complete
+                    for result in all_results:
                         if not result['success']:
                             logging.warning(f"  Error checking {result['symbol']}: {result.get('error', 'Unknown error')}")
                             continue
