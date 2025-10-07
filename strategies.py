@@ -9,6 +9,7 @@ import logging
 import random
 import time
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 from helpers import BybitHelper
 
@@ -149,6 +150,43 @@ def safe_get_price_change(
 def safe_place_order(helper: BybitHelper, **kwargs):
     """Safe order placement with retry mechanism"""
     return helper.place_order(**kwargs)
+
+
+def scan_coin_parallel(helper: BybitHelper, coin: str, category: str, hours_period: int, quick_period: int):
+    """
+    Scan a single coin for price data (used for parallel execution)
+    
+    Args:
+        helper: BybitHelper instance
+        coin: coin name (e.g., "XRP")
+        category: market category
+        hours_period: period for long-term price change
+        quick_period: period for quick price change
+        
+    Returns:
+        dict: Coin data including price and changes, or None if error
+    """
+    symbol = f"{coin}USDT"
+    try:
+        current_price = helper.get_price(category, symbol)
+        price_change = helper.get_price_change(category, symbol, hours=hours_period)
+        quick_price_change = helper.get_price_change(category, symbol, hours=quick_period)
+        
+        return {
+            'coin': coin,
+            'symbol': symbol,
+            'price': current_price,
+            'price_change': price_change,
+            'quick_change': quick_price_change,
+            'success': True
+        }
+    except Exception as e:
+        return {
+            'coin': coin,
+            'symbol': symbol,
+            'error': str(e),
+            'success': False
+        }
 
 
 def run_trailing_stop_strategy(
@@ -409,6 +447,7 @@ def run_trailing_stop_strategy(
                     f"(From entry: {format_price(total_change_from_entry)}%, "
                     f"From trailing: {format_price(price_change_from_trailing)}%, "
                     f"Change over {monitoring_period}h: {format_price(monitoring_price_change)}%)"
+                    f"{status_msg}"
                 )
 
                 # Check if we can activate trailing stop
@@ -453,13 +492,13 @@ def run_trailing_stop_strategy(
                         trailing_activated = False
                         continue
 
-                    # Round quantity to proper decimal places based on coin type
-                    if coin in ["BTC", "ETH"]:
-                        decimal_places = 6  # High-value coins need more precision
-                    elif coin in ["XRP", "ADA", "DOGE", "TRX"]:
-                        decimal_places = 1  # Low-value coins typically use 1 decimal
-                    else:
-                        decimal_places = 2  # Default for most coins
+                    # Get the correct decimal places from API
+                    try:
+                        decimal_places = helper.get_base_precision(category, symbol)
+                        logging.info(f"Base precision for {symbol}: {decimal_places} decimals")
+                    except Exception as e:
+                        logging.warning(f"Failed to get base precision: {str(e)}. Using default 2 decimals")
+                        decimal_places = 2
 
                     sell_quantity = helper.round_down(position_size, decimal_places)
 
@@ -527,7 +566,7 @@ def run_trailing_stop_strategy_whitelist(
     helper: BybitHelper,
     coin_whitelist: list,
     buy_amount: float,
-    check_interval: int = 10
+    check_interval: int = 5
 ):
     """
     Trading strategy with trailing stop for whitelist of coins.
@@ -535,11 +574,12 @@ def run_trailing_stop_strategy_whitelist(
     Algorithm workflow:
 
     1. Whitelist Scanning Phase:
-    - Monitors ALL coins from whitelist simultaneously
+    - Monitors ALL coins from whitelist simultaneously using parallel execution
     - Checks entry conditions for each coin:
       * Option 1: Price drop of 3% over 3 hours
       * Option 2: Quick rise of 3% over 1 hour
     - As soon as ANY coin meets entry conditions - buys it and switches to single-coin mode
+    - Uses ThreadPoolExecutor for fast parallel scanning (up to 10 coins at once)
 
     2. Single-Coin Management Phase:
     - Works exactly like run_trailing_stop_strategy for the selected coin
@@ -555,7 +595,7 @@ def run_trailing_stop_strategy_whitelist(
         helper: BybitHelper instance
         coin_whitelist: list of coin names (e.g., ["XRP", "ETH", "BTC"])
         buy_amount: amount in USDT to buy
-        check_interval: price check interval in seconds (default: 10 for whitelist scanning)
+        check_interval: price check interval in seconds (default: 5 for faster scanning)
     """
     category = "spot"
 
@@ -606,16 +646,33 @@ def run_trailing_stop_strategy_whitelist(
                 best_opportunity = None
                 best_score = 0
 
-                # Check all coins in whitelist
-                for coin in coin_whitelist:
-                    symbol = f"{coin}USDT"
-
-                    try:
-                        # Get price data for this coin
-                        current_price = safe_get_price(helper, category, symbol)
-                        price_change = safe_get_price_change(helper, category, symbol, hours=hours_period)
-                        quick_price_change = safe_get_price_change(helper, category, symbol, hours=quick_period)
-
+                # Scan all coins in parallel for faster execution
+                with ThreadPoolExecutor(max_workers=min(len(coin_whitelist), 10)) as executor:
+                    # Submit all scanning tasks
+                    future_to_coin = {
+                        executor.submit(scan_coin_parallel, helper, coin, category, hours_period, quick_period): coin
+                        for coin in coin_whitelist
+                    }
+                    
+                    # Collect all results first to ensure complete scan
+                    all_results = []
+                    for future in as_completed(future_to_coin):
+                        result = future.result()
+                        all_results.append(result)
+                    
+                    # Process all results after collection is complete
+                    for result in all_results:
+                        if not result['success']:
+                            logging.warning(f"  Error checking {result['symbol']}: {result.get('error', 'Unknown error')}")
+                            continue
+                        
+                        # Extract data from result
+                        coin = result['coin']
+                        symbol = result['symbol']
+                        current_price = result['price']
+                        price_change = result['price_change']
+                        quick_price_change = result['quick_change']
+                        
                         logging.info(
                             f"  {symbol}: {format_price(current_price)} USDT "
                             f"({hours_period}h: {format_price(price_change)}%, {quick_period}h: {format_price(quick_price_change)}%)"
@@ -642,10 +699,6 @@ def run_trailing_stop_strategy_whitelist(
                                 'quick_change': quick_price_change,
                                 'long_change': price_change
                             }
-
-                    except Exception as e:
-                        logging.warning(f"  Error checking {symbol}: {str(e)}")
-                        continue
 
                 # If we found an opportunity, execute it
                 if best_opportunity:
@@ -748,6 +801,7 @@ def run_trailing_stop_strategy_whitelist(
                     f"(From entry: {format_price(total_change_from_entry)}%, "
                     f"From trailing: {format_price(price_change_from_trailing)}%, "
                     f"Change over {monitoring_period}h: {format_price(monitoring_price_change)}%)"
+                    f"{status_msg}"
                 )
 
                 # Check if we can activate trailing stop
@@ -789,18 +843,18 @@ def run_trailing_stop_strategy_whitelist(
                         trailing_activated = False
                         continue
 
-                    # Determine decimal places for rounding
-                    if current_coin in ["BTC", "ETH"]:
-                        decimal_places = 6
-                    elif current_coin in ["XRP", "ADA", "DOGE", "TRX"]:
-                        decimal_places = 1
-                    else:
+                    # Get the correct decimal places from API
+                    try:
+                        decimal_places = helper.get_base_precision(category, symbol)
+                        logging.info(f"Base precision for {symbol}: {decimal_places} decimals")
+                    except Exception as e:
+                        logging.warning(f"Failed to get base precision: {str(e)}. Using default 2 decimals")
                         decimal_places = 2
 
                     sell_quantity = helper.round_down(position_size, decimal_places)
 
                     logging.info(f"Position size to sell: {format_price(position_size)} {current_coin}")
-                    logging.info(f"Selling quantity: {format_price(sell_quantity)} {current_coin}")
+                    logging.info(f"Selling quantity: {format_price(sell_quantity)} {current_coin} (rounded to {decimal_places} decimals)")
 
                     # Place sell order
                     r = safe_place_order(
