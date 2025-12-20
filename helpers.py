@@ -53,20 +53,17 @@ class BybitHelper:
             raise ValueError("HTTP client not initialized")
 
         response = self.client.get_wallet_balance(accountType="UNIFIED")
-        
+
         # Handle different response formats from the API
         if isinstance(response, tuple):
             if len(response) == 3:
-                r, _, h = response
+                r, _, _ = response
             elif len(response) == 2:
                 r, _ = response
-                h = None
             else:
                 r = response[0]
-                h = None
         else:
             r = response
-            h = None
 
         r = r.get("result", {}).get("list", [])[0]
 
@@ -96,20 +93,17 @@ class BybitHelper:
             raise ValueError("HTTP client not initialized")
 
         response = self.client.get_transaction_log()
-        
+
         # Handle different response formats from the API
         if isinstance(response, tuple):
             if len(response) == 3:
-                r, _, h = response
+                r, _, _ = response
             elif len(response) == 2:
                 r, _ = response
-                h = None
             else:
                 r = response[0]
-                h = None
         else:
             r = response
-            h = None
 
         df = DataFrame(
             [
@@ -151,23 +145,20 @@ class BybitHelper:
             raise ValueError("Coin name not specified")
 
         try:
-            # API может возвращать разные форматы ответа
+            # API can return different response formats
             api_result = self.client.get_wallet_balance(accountType="UNIFIED")
-            
-            # Обработка различных форматов ответа API
+
+            # Handle different API response formats
             if isinstance(api_result, tuple):
                 if len(api_result) == 3:
-                    response, _, headers = api_result
+                    response, _, _ = api_result
                 elif len(api_result) == 2:
                     response, _ = api_result
-                    headers = None
                 else:
                     response = api_result[0]
-                    headers = None
             else:
                 response = api_result
-                headers = None
-                
+
             if not response:
                 raise RuntimeError("Empty response from API")
 
@@ -186,7 +177,7 @@ class BybitHelper:
             for asset in coins_data:
                 coin_name = asset.get("coin")
                 available_amount = asset.get("availableToWithdraw", "0.0")
-                
+
                 # Check if coin name exists and amount is not empty
                 if coin_name and available_amount and available_amount.strip():
                     try:
@@ -196,16 +187,13 @@ class BybitHelper:
                 elif coin_name:
                     balances[coin_name] = 0.0
 
-            # Log API limits
-            # self.log_limits(headers)
-
             # Return balance for requested coin or 0.0 if coin not found
             return self.round_down(balances.get(coin, 0.0), 3)
 
         except (KeyError, IndexError) as e:
-            raise RuntimeError(f"Unexpected API response format: {str(e)}")
+            raise RuntimeError(f"Unexpected API response format: {str(e)}") from e
         except ValueError as e:
-            raise RuntimeError(f"Value conversion error: {str(e)}")
+            raise RuntimeError(f"Value conversion error: {str(e)}") from e
 
     def get_wallet_balance(self, coin: str) -> float:
         """
@@ -227,23 +215,20 @@ class BybitHelper:
             raise ValueError("Coin name not specified")
 
         try:
-            # API может возвращать разные форматы ответа
+            # API can return different response formats
             api_result = self.client.get_wallet_balance(accountType="UNIFIED")
-            
-            # Обработка различных форматов ответа API
+
+            # Handle different API response formats
             if isinstance(api_result, tuple):
                 if len(api_result) == 3:
-                    response, _, headers = api_result
+                    response, _, _ = api_result
                 elif len(api_result) == 2:
                     response, _ = api_result
-                    headers = None
                 else:
                     response = api_result[0]
-                    headers = None
             else:
                 response = api_result
-                headers = None
-                
+
             if not response:
                 raise RuntimeError("Empty response from API")
 
@@ -262,7 +247,7 @@ class BybitHelper:
             for asset in coins_data:
                 coin_name = asset.get("coin")
                 wallet_balance = asset.get("walletBalance", "0.0")
-                
+
                 # Check if coin name exists and amount is not empty
                 if coin_name and wallet_balance and wallet_balance.strip():
                     try:
@@ -276,9 +261,9 @@ class BybitHelper:
             return self.round_down(balances.get(coin, 0.0), 6)
 
         except (KeyError, IndexError) as e:
-            raise RuntimeError(f"Unexpected API response format: {str(e)}")
+            raise RuntimeError(f"Unexpected API response format: {str(e)}") from e
         except ValueError as e:
-            raise RuntimeError(f"Value conversion error: {str(e)}")
+            raise RuntimeError(f"Value conversion error: {str(e)}") from e
 
     def place_order(
         self,
@@ -321,7 +306,7 @@ class BybitHelper:
             api_result = self.client.get_instruments_info(
                 category=category, symbol=symbol
             )
-            
+
             # Handle different response formats from the API
             if isinstance(api_result, tuple):
                 if len(api_result) == 3:
@@ -362,26 +347,22 @@ class BybitHelper:
                 qty=qty,
                 marketUnit=market_unit,
             )
-            
+
             # Handle different response formats from the API
             if isinstance(api_result, tuple):
                 if len(api_result) == 3:
-                    response, _, headers = api_result
+                    response, _, _ = api_result
                 elif len(api_result) == 2:
                     response, _ = api_result
-                    headers = None
                 else:
                     response = api_result[0]
-                    headers = None
             else:
                 response = api_result
-                headers = None
 
-            # self.log_limits(headers)
             return response
 
         except Exception as e:
-            raise RuntimeError(f"Order placement failed: {str(e)}")
+            raise RuntimeError(f"Order placement failed: {str(e)}") from e
 
     def get_instrument_info(self, category: str, symbol: str) -> dict:
         """
@@ -403,27 +384,24 @@ class BybitHelper:
 
         try:
             api_result = self.client.get_instruments_info(
-                category=category,
-                symbol=symbol
+                category=category, symbol=symbol
             )
-            
+
             # Handle different response formats from the API
             if isinstance(api_result, tuple):
                 if len(api_result) == 3:
-                    response, _, headers = api_result
+                    response, _, _ = api_result
                 elif len(api_result) == 2:
                     response, _ = api_result
-                    headers = None
                 else:
                     response = api_result[0]
-                    headers = None
             else:
                 response = api_result
-                headers = None
-            # self.log_limits(headers)
             return response
         except Exception as e:
-            raise RuntimeError(f"Instrument information retrieval failed: {str(e)}")
+            raise RuntimeError(
+                f"Instrument information retrieval failed: {str(e)}"
+            ) from e
 
     def get_price(self, category: str, symbol: str) -> float:
         """
@@ -440,21 +418,17 @@ class BybitHelper:
             raise ValueError("HTTP client not initialized")
 
         api_result = self.client.get_tickers(category=category, symbol=symbol)
-        
+
         # Handle different response formats from the API
         if isinstance(api_result, tuple):
             if len(api_result) == 3:
-                r, _, h = api_result
+                r, _, _ = api_result
             elif len(api_result) == 2:
                 r, _ = api_result
-                h = None
             else:
                 r = api_result[0]
-                h = None
         else:
             r = api_result
-            h = None
-        # self.log_limits(h)
 
         return float(r.get("result", {}).get("list", [{}])[0].get("lastPrice", "0"))
 
@@ -485,21 +459,17 @@ class BybitHelper:
             interval=interval,
             limit=limit,
         )
-        
+
         # Handle different response formats from the API
         if isinstance(api_result, tuple):
             if len(api_result) == 3:
-                r, _, h = api_result
+                r, _, _ = api_result
             elif len(api_result) == 2:
                 r, _ = api_result
-                h = None
             else:
                 r = api_result[0]
-                h = None
         else:
             r = api_result
-            h = None
-        # self.log_limits(h)
 
         # Get price from hours ago
         old_price = float(r.get("result", {}).get("list", [[0]])[0][1])  # Open price
@@ -529,10 +499,9 @@ class BybitHelper:
 
         try:
             api_result = self.client.get_instruments_info(
-                category=category,
-                symbol=symbol
+                category=category, symbol=symbol
             )
-            
+
             # Handle different response formats from the API
             if isinstance(api_result, tuple):
                 if len(api_result) == 3:
@@ -549,21 +518,21 @@ class BybitHelper:
 
             instrument = response.get("result", {}).get("list", [])[0]
             lot_size_filter = instrument.get("lotSizeFilter", {})
-            
+
             # Get basePrecision - this tells us how many decimal places are allowed
             base_precision = lot_size_filter.get("basePrecision", "0.01")
-            
+
             # Convert precision string to number of decimals
             # e.g., "0.01" -> 2, "0.0001" -> 4, "1" -> 0
             if "." in base_precision:
                 decimals = len(base_precision.split(".")[1])
             else:
                 decimals = 0
-                
+
             return decimals
 
         except Exception as e:
-            raise RuntimeError(f"Failed to get base precision: {str(e)}")
+            raise RuntimeError(f"Failed to get base precision: {str(e)}") from e
 
     def round_down(self, value: float, decimals: int) -> float:
         """

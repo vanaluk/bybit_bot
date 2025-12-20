@@ -1,7 +1,12 @@
 __pycache__
 .git
 .mypy_cache
+# Environment
 .env
+.env.local
+.env.*.local
+# Don't ignore the example
+!.env.example
 .trunk
 .pylintrc
 bybit.txt
