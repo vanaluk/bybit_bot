@@ -11,7 +11,7 @@ from dotenv import load_dotenv
 from pybit.unified_trading import HTTP
 from helpers import BybitHelper
 from logger import setup_logger
-from tests import test_connection, test_place_order
+from tests import test_connection
 
 load_dotenv()
 
